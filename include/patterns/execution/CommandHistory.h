@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <memory>
-#include "WorkCommand.h"
+#include "patterns/execution/WorkCommand.h" 
 
 class CommandHistory {
 private:

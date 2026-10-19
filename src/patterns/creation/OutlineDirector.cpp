@@ -1,4 +1,4 @@
-#include "OutlineDirector.h"
+#include "patterns/creation/OutlineDirector.h"
 
 OutlineDirector::OutlineDirector(std::string outline, WorkflowBuilder* builder)
     : outline(outline), builder(builder) {}

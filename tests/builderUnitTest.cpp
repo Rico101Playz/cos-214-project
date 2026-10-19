@@ -1,25 +1,15 @@
 #include <iostream>
 #include <string>
 
-#include "ConcreteDefinitionBuilder.h"
-#include "FeatureDeliveryProcess.h"
-#include "WorkflowDefinition.h"
+#include "test_utils.h"
+
+#include "patterns/creation/ConcreteDefinitionBuilder.h"
+#include "patterns/creation/FeatureDeliveryProcess.h"
+#include "core/WorkflowDefinition.h"
 
 // ============================================================================
 // SIMPLE TEST RUNNER
 // ============================================================================
-int testsPassed = 0;
-int testsFailed = 0;
-
-void check(bool condition, const std::string& testName) {
-    if (condition) {
-        std::cout << "[PASS] " << testName << "\n";
-        testsPassed++;
-    } else {
-        std::cerr << "[FAIL] " << testName << "\n";
-        testsFailed++;
-    }
-}
 
 // ============================================================================
 // TEST: Builder Mechanics
@@ -76,18 +66,12 @@ void test_FeatureDeliveryProcess() {
 // ============================================================================
 // MAIN
 // ============================================================================
-int main() {
-    std::cout << "========================================\n";
-    std::cout << "       Running Builder Tests\n";
-    std::cout << "========================================\n";
+void run_builder_tests() {
+    std::cout << "\n--- Running Builder Tests ---\n";
     
     test_ConcreteDefinitionBuilder();
     test_FeatureDeliveryProcess();
     
-    std::cout << "\n========================================\n";
-    std::cout << "Results: " << testsPassed << " passed, " 
+    std::cout << "Builder Tests: " << testsPassed << " passed, " 
               << testsFailed << " failed.\n";
-    std::cout << "========================================\n";
-    
-    return (testsFailed == 0) ? 0 : 1;
 }

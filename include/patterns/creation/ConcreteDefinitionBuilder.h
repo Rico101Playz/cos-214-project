@@ -1,7 +1,7 @@
 #ifndef CONCRETEDEFINITIONBUILDER_H
 #define CONCRETEDEFINITIONBUILDER_H
 
-#include "WorkflowBuilder.h"
+#include "patterns/creation/WorkflowBuilder.h"
 
 class ConcreteDefinitionBuilder : public WorkflowBuilder {
 private:

@@ -1,4 +1,4 @@
-#include "CancelCommand.h"
+#include "patterns/execution/CancelCommand.h"
 
 CancelCommand::CancelCommand(const std::string& nodeId, const std::string& reason)
     : nodeId(nodeId), reason(reason) {}

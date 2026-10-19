@@ -1,4 +1,4 @@
-#include "CommandInvoker.h"
+#include "patterns/execution/CommandInvoker.h"
 
 void CommandInvoker::invoke(std::unique_ptr<WorkCommand> command) {
     if (command) {

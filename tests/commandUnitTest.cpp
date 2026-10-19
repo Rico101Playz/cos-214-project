@@ -2,35 +2,25 @@
 #include <string>
 #include <memory>
 
-#include "WorkCommand.h"
-#include "CommandHistory.h"
-#include "CommandInvoker.h"
-#include "AddWorkCommand.h"
-#include "AssignCommand.h"
-#include "StartCommand.h"
-#include "CompleteCommand.h"
-#include "ApproveCommand.h"
-#include "RejectCommand.h"
-#include "EscalateCommand.h"
-#include "InvokeCommand.h"
-#include "CancelCommand.h"
-#include "SetDataCommand.h"
+#include "test_utils.h"
+
+#include "patterns/execution/WorkCommand.h"
+#include "patterns/execution/CommandHistory.h"
+#include "patterns/execution/CommandInvoker.h"
+#include "patterns/execution/AddWorkCommand.h"
+#include "patterns/execution/AssignCommand.h"
+#include "patterns/execution/StartCommand.h"
+#include "patterns/execution/CompleteCommand.h"
+#include "patterns/execution/ApproveCommand.h"
+#include "patterns/execution/RejectCommand.h"
+#include "patterns/execution/EscalateCommand.h"
+#include "patterns/execution/InvokeCommand.h"
+#include "patterns/execution/CancelCommand.h"
+#include "patterns/execution/SetDataCommand.h"
 
 // ============================================================================
 // SIMPLE TEST RUNNER
 // ============================================================================
-int testsPassed = 0;
-int testsFailed = 0;
-
-void check(bool condition, const std::string& testName) {
-    if (condition) {
-        std::cout << "[PASS] " << testName << "\n";
-        testsPassed++;
-    } else {
-        std::cerr << "[FAIL] " << testName << "\n";
-        testsFailed++;
-    }
-}
 
 // ============================================================================
 // TEST: CommandHistory Management
@@ -129,19 +119,13 @@ void test_ConcreteCommands() {
 // ============================================================================
 // MAIN
 // ============================================================================
-int main() {
-    std::cout << "========================================\n";
-    std::cout << "       Running Basic Tests\n";
-    std::cout << "========================================\n";
+void run_command_tests() {
+    std::cout << "\n--- Running Command Tests ---\n";
     
     test_CommandHistory();
     test_CommandInvoker();
     test_ConcreteCommands();
     
-    std::cout << "\n========================================\n";
-    std::cout << "Results: " << testsPassed << " passed, " 
+    std::cout << "Command Tests: " << testsPassed << " passed, " 
               << testsFailed << " failed.\n";
-    std::cout << "========================================\n";
-    
-    return (testsFailed == 0) ? 0 : 1;
 }

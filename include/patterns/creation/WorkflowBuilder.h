@@ -2,7 +2,7 @@
 #define WORKFLOWBUILDER_H
 
 #include <string>
-#include "WorkflowDefinition.h"
+#include "core/WorkflowDefinition.h"
 
 class WorkflowBuilder {
 public:

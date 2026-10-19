@@ -1,4 +1,4 @@
-#include "CommandHistory.h"
+#include "patterns/execution/CommandHistory.h"
 
 void CommandHistory::push(std::unique_ptr<WorkCommand> command) {
     executed.push_back(std::move(command));

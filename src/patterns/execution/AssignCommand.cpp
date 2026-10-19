@@ -1,4 +1,4 @@
-#include "AssignCommand.h"
+#include "patterns/execution/AssignCommand.h"
 
 AssignCommand::AssignCommand(const std::string& itemId, const std::string& participantName) 
     : itemId(itemId), participantName(participantName) {}
