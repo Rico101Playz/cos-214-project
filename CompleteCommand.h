@@ -5,15 +5,13 @@
 
 class CompleteCommand : public WorkCommand {
 private:
-    std::string itemId_;
-
-public:
-    CompleteCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId);
-    
-    std::string describe() const override;
+    std::string itemId;
 
 protected:
     void perform() override;
+
+public:
+    std::string describe() const override;
 };
 
 #endif // COMPLETECOMMAND_H

@@ -5,18 +5,15 @@
 
 class SetDataCommand : public WorkCommand {
 private:
-    std::string nodeId_;
-    std::string key_;
-    std::string value_;
-
-public:
-    SetDataCommand(WorkflowInstance& instance, Participant* actor, 
-        const std::string& nodeId, const std::string& key, const std::string& value);
-    
-    std::string describe() const override;
+    std::string nodeId;
+    std::string key;
+    std::string value;
 
 protected:
     void perform() override;
+
+public:
+    std::string describe() const override;
 };
 
 #endif // SETDATACOMMAND_H

@@ -5,15 +5,13 @@
 
 class StartCommand : public WorkCommand {
 private:
-    std::string itemId_;
-
-public:
-    StartCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId);
-    
-    std::string describe() const override;
+    std::string itemId;
 
 protected:
     void perform() override;
+
+public:
+    std::string describe() const override;
 };
 
 #endif // STARTCOMMAND_H

@@ -5,17 +5,14 @@
 
 class CancelCommand : public WorkCommand {
 private:
-    std::string nodeId_;
-    std::string reason_;
-
-public:
-    CancelCommand(WorkflowInstance& instance, Participant* actor, 
-                  const std::string& nodeId, const std::string& reason);
-    
-    std::string describe() const override;
+    std::string nodeId;
+    std::string reason;
 
 protected:
     void perform() override;
+
+public:
+    std::string describe() const override;
 };
 
 #endif // CANCELCOMMAND_H

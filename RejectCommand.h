@@ -5,17 +5,14 @@
 
 class RejectCommand : public WorkCommand {
 private:
-    std::string itemId_;
-    std::string reason_;
-
-public:
-    RejectCommand(WorkflowInstance& instance, Participant* actor, 
-                  const std::string& itemId, const std::string& reason);
-    
-    std::string describe() const override;
+    std::string itemId;
+    std::string reason;
 
 protected:
     void perform() override;
+
+public:
+    std::string describe() const override;
 };
 
 #endif // REJECTCOMMAND_H

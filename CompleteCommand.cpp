@@ -1,10 +1,7 @@
 #include "CompleteCommand.h"
 
-CompleteCommand::CompleteCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId)
-    : WorkCommand(instance, actor), itemId_(itemId) {}
+void CompleteCommand::perform() {}
 
 std::string CompleteCommand::describe() const {
-    return "Complete item " + itemId_;
+    return "CompleteCommand";
 }
-
-void CompleteCommand::perform() {}

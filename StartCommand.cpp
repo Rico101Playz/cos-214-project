@@ -1,10 +1,7 @@
 #include "StartCommand.h"
 
-StartCommand::StartCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId)
-    : WorkCommand(instance, actor), itemId_(itemId) {}
+void StartCommand::perform() {}
 
 std::string StartCommand::describe() const {
-    return "Start item " + itemId_;
+    return "StartCommand";
 }
-
-void StartCommand::perform() {}
