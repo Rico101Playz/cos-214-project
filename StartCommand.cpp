@@ -3,6 +3,8 @@
 StartCommand::StartCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId)
     : WorkCommand(instance, actor), itemId_(itemId) {}
 
-std::string StartCommand::describe() const {}
+std::string StartCommand::describe() const {
+    return "Start item " + itemId_;
+}
 
 void StartCommand::perform() {}

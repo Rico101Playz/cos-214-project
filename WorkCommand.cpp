@@ -1,10 +1,13 @@
 #include "WorkCommand.h"
+#include <chrono>
 
 WorkCommand::WorkCommand(WorkflowInstance& instance, Participant* actor): instance_(instance), actor_(actor), executedAt_(0) {}
 
 WorkCommand::~WorkCommand() = default;
 
-void WorkCommand::execute() {}
+void WorkCommand::execute() {
+    perform();
+}
 
 void WorkCommand::undo() {}
 

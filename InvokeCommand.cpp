@@ -6,7 +6,9 @@ InvokeCommand::InvokeCommand(WorkflowInstance& instance, Participant* actor,
     : WorkCommand(instance, actor), itemId_(itemId), connector_(connector), 
       operation_(operation), arguments_(arguments) {}
 
-std::string InvokeCommand::describe() const {}
+std::string InvokeCommand::describe() const {
+    return "Invoke " + operation_ + " on item " + itemId_;
+}
 
 const Payload& InvokeCommand::result() const { 
     return result_; 

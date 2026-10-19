@@ -3,6 +3,8 @@
 CompleteCommand::CompleteCommand(WorkflowInstance& instance, Participant* actor, const std::string& itemId)
     : WorkCommand(instance, actor), itemId_(itemId) {}
 
-std::string CompleteCommand::describe() const {}
+std::string CompleteCommand::describe() const {
+    return "Complete item " + itemId_;
+}
 
 void CompleteCommand::perform() {}

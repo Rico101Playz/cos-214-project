@@ -4,6 +4,8 @@ ApproveCommand::ApproveCommand(WorkflowInstance& instance, Participant* approver
                                const std::string& itemId, bool approved, const std::string& comment)
     : WorkCommand(instance, approver), itemId_(itemId), approved_(approved), comment_(comment) {}
 
-std::string ApproveCommand::describe() const {}
+std::string ApproveCommand::describe() const {
+    return (approved_ ? "Approve" : "Reject") + std::string(" item ") + itemId_;
+}
 
 void ApproveCommand::perform() {}
