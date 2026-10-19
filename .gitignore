@@ -1,0 +1,7 @@
+# Ignore object files
+*.o
+*.obj
+
+# Ignore executables
+run_tests
+run_tests.exe
