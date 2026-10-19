@@ -1,4 +1,4 @@
-#include "WorkCommand.h"
+#include "patterns/execution/WorkCommand.h"
 
 void WorkCommand::execute() {
     perform();

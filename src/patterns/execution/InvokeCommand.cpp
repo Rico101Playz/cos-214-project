@@ -1,4 +1,4 @@
-#include "InvokeCommand.h"
+#include "patterns/execution/InvokeCommand.h"
 
 InvokeCommand::InvokeCommand(const std::string& itemId, const std::string& operation)
     : itemId(itemId), operation(operation) {}

@@ -1,4 +1,4 @@
-#include "ConcreteDefinitionBuilder.h"
+#include "patterns/creation/ConcreteDefinitionBuilder.h"
 
 void ConcreteDefinitionBuilder::reset(std::string name) {
     definition = WorkflowDefinition();

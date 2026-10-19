@@ -1,4 +1,4 @@
-#include "ApproveCommand.h"
+#include "patterns/execution/ApproveCommand.h"
 
 ApproveCommand::ApproveCommand(const std::string& itemId, bool approved, const std::string& comment)
     : itemId(itemId), approved(approved), comment(comment) {}

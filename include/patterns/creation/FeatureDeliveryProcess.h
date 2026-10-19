@@ -1,7 +1,7 @@
 #ifndef FEATUREDELIVERYPROCESS_H
 #define FEATUREDELIVERYPROCESS_H
 
-#include "WorkflowBuilder.h"
+#include "patterns/creation/WorkflowBuilder.h"
 
 class FeatureDeliveryProcess {
 public:

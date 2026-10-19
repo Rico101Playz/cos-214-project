@@ -1,4 +1,4 @@
-#include "AddWorkCommand.h"
+#include "patterns/execution/AddWorkCommand.h"
 
 AddWorkCommand::AddWorkCommand(const std::string& stageId) : stageId(stageId) {}
 

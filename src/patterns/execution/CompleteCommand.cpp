@@ -1,4 +1,4 @@
-#include "CompleteCommand.h"
+#include "patterns/execution/CompleteCommand.h"
 
 CompleteCommand::CompleteCommand(const std::string& itemId) : itemId(itemId) {}
 

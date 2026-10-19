@@ -1,4 +1,4 @@
-#include "EscalateCommand.h"
+#include "patterns/execution/EscalateCommand.h"
 
 EscalateCommand::EscalateCommand(const std::string& itemId) : itemId(itemId) {}
 

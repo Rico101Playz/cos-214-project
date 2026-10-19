@@ -2,7 +2,7 @@
 #define OUTLINEDIRECTOR_H
 
 #include <string>
-#include "WorkflowBuilder.h"
+#include "patterns/creation/WorkflowBuilder.h"
 
 class OutlineDirector {
 private:
