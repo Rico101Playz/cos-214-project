@@ -2,6 +2,7 @@
 #define INVOKECOMMAND_H
 
 #include "WorkCommand.h"
+#include <string>
 
 class InvokeCommand : public WorkCommand {
 private:
@@ -12,6 +13,7 @@ protected:
     void perform() override;
 
 public:
+    InvokeCommand(const std::string& itemId, const std::string& operation);
     std::string describe() const override;
 };
 

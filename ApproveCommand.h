@@ -2,6 +2,7 @@
 #define APPROVECOMMAND_H
 
 #include "WorkCommand.h"
+#include <string>
 
 class ApproveCommand : public WorkCommand {
 private:
@@ -13,6 +14,7 @@ protected:
     void perform() override;
 
 public:
+    ApproveCommand(const std::string& itemId, bool approved, const std::string& comment);
     std::string describe() const override;
 };
 

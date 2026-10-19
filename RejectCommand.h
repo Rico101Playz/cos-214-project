@@ -2,6 +2,7 @@
 #define REJECTCOMMAND_H
 
 #include "WorkCommand.h"
+#include <string>
 
 class RejectCommand : public WorkCommand {
 private:
@@ -12,6 +13,7 @@ protected:
     void perform() override;
 
 public:
+    RejectCommand(const std::string& itemId, const std::string& reason);
     std::string describe() const override;
 };
 
