@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -11,6 +12,7 @@
 #include "patterns/execution/AssignmentStrategy.h"
 #include "patterns/execution/RoleBasedAssignment.h"
 #include "patterns/execution/LeastLoadedAssignment.h"
+#include "patterns/execution/RuleBasedAssignment.h"
 
 // ============================================================================
 // TEST: Participant
@@ -233,6 +235,73 @@ void test_LeastLoadedAssignment() {
 }
 
 // ============================================================================
+// TEST: RuleBasedAssignment
+// ============================================================================
+void test_RuleBasedAssignment() {
+    std::cout << "\n--- Testing RuleBasedAssignment ---\n";
+
+    Organisation org("Acme Software");
+    buildFeatureDeliveryTeam(org);
+
+    // Feature Delivery policy: high-risk reviews go to the Tech Lead.
+    RuleBasedAssignment rules(std::unique_ptr<AssignmentStrategy>(new LeastLoadedAssignment()));
+    rules.addRule("Reviewer", "risk", "high", "Tech Lead");
+    const AssignmentStrategy& strategy = rules;
+
+    check(strategy.name() == "RuleBased(LeastLoaded)", "RuleBased: name includes its fallback");
+
+    WorkItem normalReview("F11", "Code review", "Reviewer");
+    normalReview.setData("risk", "normal");
+    Participant* chosen = strategy.assign(normalReview, normalReview.role(), org);
+    check(chosen != nullptr && chosen->name() == "Rita",
+          "RuleBased: with no matching rule the fallback picks for the original role");
+
+    WorkItem noRiskData("F11b", "Code review", "Reviewer");
+    chosen = strategy.assign(noRiskData, noRiskData.role(), org);
+    check(chosen != nullptr && chosen->name() == "Rita",
+          "RuleBased: an item without the data key matches no rule");
+
+    WorkItem securityReview("F16", "Security review", "Reviewer");
+    securityReview.setData("risk", "high");
+    chosen = strategy.assign(securityReview, securityReview.role(), org);
+    check(chosen != nullptr && chosen->name() == "Tess",
+          "RuleBased: a high-risk review is routed to the Tech Lead");
+
+    WorkItem riskyBackend("F06", "Implement backend", "Developer");
+    riskyBackend.setData("risk", "high");
+    chosen = strategy.assign(riskyBackend, riskyBackend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Alice",
+          "RuleBased: a rule only applies to the role it names (developers are not rerouted)");
+
+    org.find("Tess")->setAvailable(false);
+    chosen = strategy.assign(securityReview, securityReview.role(), org);
+    check(chosen == nullptr,
+          "RuleBased: high-risk work does not fall back to an ordinary reviewer");
+    org.find("Tess")->setAvailable(true);
+
+    // The fallback still decides WHO among the rerouted role's holders.
+    Organisation twoLeads("Two Leads");
+    twoLeads.addParticipant("Tess", "Tech Lead");
+    twoLeads.addParticipant("Tom", "Tech Lead");
+    twoLeads.find("Tess")->addLoad(2);
+    chosen = strategy.assign(securityReview, securityReview.role(), twoLeads);
+    check(chosen != nullptr && chosen->name() == "Tom",
+          "RuleBased: the fallback (least loaded) chooses between several Tech Leads");
+
+    // Order matters: the first matching rule wins.
+    RuleBasedAssignment ordered(std::unique_ptr<AssignmentStrategy>(new RoleBasedAssignment()));
+    ordered.addRule("Reviewer", "risk", "high", "Tech Lead");
+    ordered.addRule("Reviewer", "risk", "high", "Release Manager");
+    chosen = ordered.assign(securityReview, securityReview.role(), org);
+    check(chosen != nullptr && chosen->name() == "Tess",
+          "RuleBased: the first matching rule wins");
+
+    // A missing fallback defaults to RoleBasedAssignment.
+    RuleBasedAssignment defaulted((std::unique_ptr<AssignmentStrategy>()));
+    check(defaulted.name() == "RuleBased(RoleBased)", "RuleBased: a null fallback defaults to RoleBased");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -245,6 +314,7 @@ void run_strategy_tests() {
     test_WorkItem();
     test_RoleBasedAssignment();
     test_LeastLoadedAssignment();
+    test_RuleBasedAssignment();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
