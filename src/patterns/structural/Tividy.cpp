@@ -5,9 +5,11 @@
 #include "patterns/creation/FeatureDeliveryProcess.h"
 #include "patterns/execution/ApproveCommand.h"
 #include "patterns/execution/AssignCommand.h"
+#include "patterns/execution/CancelCommand.h"
 #include "patterns/execution/CompleteCommand.h"
 #include "patterns/execution/RejectCommand.h"
 #include "patterns/execution/StartCommand.h"
+#include "patterns/execution/DepthFirstIterator.h"
 #include "patterns/execution/ReadyOnlyIterator.h"
 
 Tividy::Tividy(const std::string& organisationName)
@@ -123,6 +125,37 @@ void Tividy::reject(const std::string& instanceId, const std::string& itemId,
         assignee->addLoad(-1);
     }
     invoker_.invoke(std::unique_ptr<WorkCommand>(new RejectCommand(itemId, reason)));
+}
+
+void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
+    WorkflowInstance& instance = findInstance(instanceId);
+
+    // Note who is still busy before cancelling, since cancelling wipes the
+    // statuses that say so.
+    std::vector<Participant*> busy;
+    DepthFirstIterator it(&instance.root());
+    for (it.first(); !it.isDone(); it.next()) {
+        WorkItem* item = dynamic_cast<WorkItem*>(it.currentItem());
+        if (item != nullptr &&
+            (item->status() == WorkItem::ASSIGNED ||
+             item->status() == WorkItem::IN_PROGRESS ||
+             item->status() == WorkItem::AWAITING_APPROVAL)) {
+            Participant* assignee = organisation_.find(item->assignee());
+            if (assignee != nullptr) {
+                busy.push_back(assignee);
+            }
+        }
+    }
+
+    instance.cancel(reason);
+    for (std::size_t i = 0; i < busy.size(); ++i) {
+        busy[i]->addLoad(-1);
+    }
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new CancelCommand(instanceId, reason)));
+}
+
+void Tividy::undo() {
+    invoker_.undoLast();
 }
 
 const WorkflowInstance& Tividy::instance(const std::string& instanceId) const {

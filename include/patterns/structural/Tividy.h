@@ -67,6 +67,17 @@ public:
     void reject(const std::string& instanceId, const std::string& itemId,
                 const std::string& reason = "");
 
+    // Cancels all unfinished work in the instance and releases the load of
+    // everyone still working on it.
+    void cancel(const std::string& instanceId, const std::string& reason = "");
+
+    // Undoes the most recent operation through the CommandInvoker.
+    // NOTE (integration point): the commands do not hold a receiver yet, so
+    // WorkCommand::undo() is still a no-op and this only removes the command
+    // from the history. Once the commands act on the instance, this undoes
+    // the work as well without any change here.
+    void undo();
+
     // Read-only view of a running instance.
     const WorkflowInstance& instance(const std::string& instanceId) const;
     // Ids of the items in the instance that can be picked up right now.
