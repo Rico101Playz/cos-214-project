@@ -21,6 +21,12 @@ private:
     std::map<std::string, std::string> data_;
 
 public:
+
+    std::string itemId;
+    std::string state;
+    std::string assignee;
+    
+    WorkItem(std::string id) : itemId(std::move(id)), state("Pending") {}
     WorkItem(const std::string& id, const std::string& name, const std::string& role);
 
     const std::string& id() const;
