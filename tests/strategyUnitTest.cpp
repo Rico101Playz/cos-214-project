@@ -13,6 +13,7 @@
 #include "patterns/execution/RoleBasedAssignment.h"
 #include "patterns/execution/LeastLoadedAssignment.h"
 #include "patterns/execution/RuleBasedAssignment.h"
+#include "patterns/execution/AssignmentService.h"
 
 // ============================================================================
 // TEST: Participant
@@ -302,6 +303,63 @@ void test_RuleBasedAssignment() {
 }
 
 // ============================================================================
+// TEST: AssignmentService (the Strategy context)
+// ============================================================================
+void test_AssignmentService() {
+    std::cout << "\n--- Testing AssignmentService ---\n";
+
+    Organisation org("Acme Software");
+    buildFeatureDeliveryTeam(org);
+    AssignmentService service(org);
+    WorkItem backend("F06", "Implement backend", "Developer");
+
+    check(service.strategy().name() == "RoleBased", "AssignmentService: starts with RoleBased");
+    check(service.chooseAssignee(backend, backend.role())->name() == "Alice",
+          "AssignmentService: delegates to the current strategy");
+
+    // The team gets busier: swap the policy while the workflow is running.
+    org.find("Alice")->addLoad(4);
+    service.setStrategy(std::unique_ptr<AssignmentStrategy>(new LeastLoadedAssignment()));
+    check(service.strategy().name() == "LeastLoaded", "AssignmentService: setStrategy() swaps the policy");
+    check(service.chooseAssignee(backend, backend.role())->name() == "Bob",
+          "AssignmentService: the same request now gets a different answer");
+
+    // Swap again to a composed strategy.
+    RuleBasedAssignment* rules = new RuleBasedAssignment(std::unique_ptr<AssignmentStrategy>(new LeastLoadedAssignment()));
+    rules->addRule("Reviewer", "risk", "high", "Tech Lead");
+    service.setStrategy(std::unique_ptr<AssignmentStrategy>(rules));
+
+    WorkItem securityReview("F16", "Security review", "Reviewer");
+    securityReview.setData("risk", "high");
+    check(service.chooseAssignee(securityReview, securityReview.role())->name() == "Tess",
+          "AssignmentService: works with a composed rule-based strategy");
+
+    // A null strategy is refused and the current one is kept.
+    bool threw = false;
+    try {
+        service.setStrategy(std::unique_ptr<AssignmentStrategy>());
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    check(threw, "AssignmentService: a null strategy is rejected");
+    check(service.strategy().name() == "RuleBased(LeastLoaded)",
+          "AssignmentService: a rejected strategy leaves the current one in place");
+
+    // The service reads the organisation it was given, so later changes are seen.
+    org.addParticipant("Dina", "Designer");
+    check(service.chooseAssignee(backend, "Designer")->name() == "Dina",
+          "AssignmentService: sees participants added to the organisation later");
+
+    check(service.chooseAssignee(backend, "Astronaut") == nullptr,
+          "AssignmentService: returns nullptr when nobody is eligible");
+
+    int loadBefore = org.find("Bob")->load();
+    service.chooseAssignee(backend, "Developer");
+    check(org.find("Bob")->load() == loadBefore,
+          "AssignmentService: choosing an assignee does not change anyone's load");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -315,6 +373,7 @@ void run_strategy_tests() {
     test_RoleBasedAssignment();
     test_LeastLoadedAssignment();
     test_RuleBasedAssignment();
+    test_AssignmentService();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
