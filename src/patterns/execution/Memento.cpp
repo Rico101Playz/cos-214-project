@@ -58,15 +58,38 @@ const std::vector<ApprovalSnapshot>& InstanceMemento::getApprovals() const {
     return approvals; 
 }
 
-void InstanceMemento::addItem(WorkItemSnapshot item) {}
+void InstanceMemento::addItem(WorkItemSnapshot item) {
+    items.push_back(std::move(item));
+}
 
-void InstanceMemento::addApproval(ApprovalSnapshot approval) {}
+void InstanceMemento::addApproval(ApprovalSnapshot approval) {
+    approvals.push_back(std::move(approval));
+}
 
 // ---------------------------------------------------------
 // SnapshotStore
 // ---------------------------------------------------------
-void SnapshotStore::save(const std::string& instanceId, std::unique_ptr<InstanceMemento> memento) {}
+void SnapshotStore::save(const std::string& instanceId, std::unique_ptr<InstanceMemento> memento) {
+    if (!memento) return;
+    std::string label = memento->getLabel();
+    snapshots[instanceId][label] = std::move(memento);
+}
 
-InstanceMemento* SnapshotStore::get(const std::string& instanceId, const std::string& label) const {}
+InstanceMemento* SnapshotStore::get(const std::string& instanceId, const std::string& label) const {
+    auto itInstance = snapshots.find(instanceId);
+    if (itInstance != snapshots.end()) {
+        auto itLabel = itInstance->second.find(label);
+        if (itLabel != itInstance->second.end()) {
+            return itLabel->second.get();
+        }
+    }
+    return nullptr;
+}
 
-bool SnapshotStore::has(const std::string& instanceId, const std::string& label) const {}
+bool SnapshotStore::has(const std::string& instanceId, const std::string& label) const {
+    auto itInstance = snapshots.find(instanceId);
+    if (itInstance != snapshots.end()) {
+        return itInstance->second.find(label) != itInstance->second.end();
+    }
+    return false;
+}
