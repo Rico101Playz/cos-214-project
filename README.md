@@ -95,7 +95,9 @@ cos-214-project/
 │   ├── commandUnitTest.cpp     # Command pattern tests
 │   ├── builderUnitTest.cpp     # Builder pattern tests
 │   ├── compositeUnitTest.cpp   # Work tree (WorkNode, CompositeStage, WorkItem lifecycle) tests
-│   └── iteratorUnitTest.cpp    # Iterator pattern tests
+│   ├── iteratorUnitTest.cpp    # Iterator pattern tests
+│   ├── workflowInstanceUnitTest.cpp # WorkflowInstance (running a definition) tests
+│   └── facadeUnitTest.cpp      # Facade (Tividy) tests
 └── docs/                       # Project Documentation
     ├── diagrams/               # Activity, class, sequence, and state diagrams
     ├── research/               # Research findings and references

@@ -5,6 +5,10 @@ void run_command_tests();
 void run_builder_tests();
 void run_memento_test();
 void run_strategy_tests();
+void run_composite_tests();
+void run_iterator_tests();
+void run_workflow_instance_tests();
+void run_facade_tests();
 
 int main() {
     std::cout << "========================================\n";
@@ -16,6 +20,11 @@ int main() {
     run_memento_test();
     run_strategy_tests();
 
+    run_composite_tests();
+    run_iterator_tests();
+    run_workflow_instance_tests();
+    run_facade_tests();
+    
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, " 
               << testsFailed << " failed.\n";
