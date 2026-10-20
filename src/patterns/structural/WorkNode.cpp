@@ -1,4 +1,5 @@
 #include "patterns/structural/WorkNode.h"
+#include "patterns/execution/DepthFirstIterator.h"
 
 WorkNode::WorkNode(const std::string& id, const std::string& name)
     : id_(id), name_(name), parent_(nullptr) {}
@@ -28,4 +29,8 @@ WorkNode* WorkNode::find(const std::string& id) {
         }
     }
     return nullptr;
+}
+
+std::unique_ptr<WorkIterator> WorkNode::createIterator() {
+    return std::unique_ptr<WorkIterator>(new DepthFirstIterator(this));
 }

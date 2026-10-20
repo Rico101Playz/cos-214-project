@@ -2,7 +2,10 @@
 #define WORKNODE_H
 
 #include <cstddef>
+#include <memory>
 #include <string>
+
+class WorkIterator;
 
 // COMPOSITE pattern - the COMPONENT.
 //
@@ -47,6 +50,10 @@ public:
 
     // Searches this node and everything below it; nullptr when not found.
     WorkNode* find(const std::string& id);
+
+    // ITERATOR pattern - the factory method on the aggregate. Returns a
+    // depth-first iterator over this node and everything below it.
+    std::unique_ptr<WorkIterator> createIterator();
 };
 
 #endif // WORKNODE_H
