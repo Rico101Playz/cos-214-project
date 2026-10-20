@@ -2,20 +2,31 @@
 #define WORKCOMMAND_H
 
 #include <string>
+#include <memory>
+
+class InstanceMemento;
+class SnapshotStore;
+class WorkflowInstance;
 
 class WorkCommand {
-private:
-    int executedAt;
-
 protected:
-    virtual void perform() = 0;
+    std::shared_ptr<InstanceMemento> before; 
+    
+    SnapshotStore* store;
+    std::string instanceId;
 
 public:
+    WorkCommand(SnapshotStore* st, std::string instId);
     virtual ~WorkCommand() = default;
+
+    void execute(WorkflowInstance* instance);
     
-    void execute();
-    void undo();
+    void undo(WorkflowInstance* instance);
+    
     virtual std::string describe() const = 0;
+
+protected:
+    virtual void perform(WorkflowInstance* instance) = 0;
 };
 
 #endif // WORKCOMMAND_H
