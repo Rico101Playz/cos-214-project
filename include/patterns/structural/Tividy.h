@@ -8,12 +8,17 @@
 #include "core/Organisation.h"
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
+#include "patterns/execution/CommandInvoker.h"
 
 // FACADE pattern - the FACADE.
 //
 // The single entry point to the engine. Clients load definitions, start
 // instances and drive work items by id here, without touching the builders,
 // work tree, iterators or organisation behind it.
+//
+// Each work item operation updates the instance and is then recorded as the
+// matching WorkCommand through the CommandInvoker, so the command history
+// sees every action taken through the engine.
 //
 // Every call that names something unknown (definition, instance, item or
 // participant) throws std::invalid_argument; a call the item's or instance's
@@ -24,9 +29,12 @@ private:
     Organisation organisation_;
     std::map<std::string, WorkflowDefinition> definitions_;
     std::map<std::string, std::unique_ptr<WorkflowInstance> > instances_;
+    CommandInvoker invoker_;
     int nextInstance_;
 
     WorkflowInstance& findInstance(const std::string& instanceId) const;
+    WorkItem& findItem(const std::string& instanceId, const std::string& itemId) const;
+    Participant& findParticipant(const std::string& name) const;
 
 public:
     explicit Tividy(const std::string& organisationName);
@@ -46,6 +54,18 @@ public:
 
     // Starts a new running instance of a stored definition and returns its id.
     std::string startInstance(const std::string& definition);
+
+    // Work item operations. assign() names a participant in the organisation
+    // and adds to their load; the load is released again when the work is
+    // approved, rejected or reassigned. approve() also moves the instance on
+    // to its next stage once the current one is finished.
+    void assign(const std::string& instanceId, const std::string& itemId,
+                const std::string& participant);
+    void start(const std::string& instanceId, const std::string& itemId);
+    void complete(const std::string& instanceId, const std::string& itemId);
+    void approve(const std::string& instanceId, const std::string& itemId);
+    void reject(const std::string& instanceId, const std::string& itemId,
+                const std::string& reason = "");
 
     // Read-only view of a running instance.
     const WorkflowInstance& instance(const std::string& instanceId) const;

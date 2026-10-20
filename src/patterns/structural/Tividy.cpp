@@ -3,6 +3,11 @@
 #include <stdexcept>
 #include "patterns/creation/ConcreteDefinitionBuilder.h"
 #include "patterns/creation/FeatureDeliveryProcess.h"
+#include "patterns/execution/ApproveCommand.h"
+#include "patterns/execution/AssignCommand.h"
+#include "patterns/execution/CompleteCommand.h"
+#include "patterns/execution/RejectCommand.h"
+#include "patterns/execution/StartCommand.h"
 #include "patterns/execution/ReadyOnlyIterator.h"
 
 Tividy::Tividy(const std::string& organisationName)
@@ -17,6 +22,22 @@ WorkflowInstance& Tividy::findInstance(const std::string& instanceId) const {
         throw std::invalid_argument("Unknown instance: " + instanceId);
     }
     return *it->second;
+}
+
+WorkItem& Tividy::findItem(const std::string& instanceId, const std::string& itemId) const {
+    WorkItem* item = findInstance(instanceId).item(itemId);
+    if (item == nullptr) {
+        throw std::invalid_argument("Unknown item " + itemId + " in instance " + instanceId);
+    }
+    return *item;
+}
+
+Participant& Tividy::findParticipant(const std::string& name) const {
+    Participant* participant = organisation_.find(name);
+    if (participant == nullptr) {
+        throw std::invalid_argument("Unknown participant: " + name);
+    }
+    return *participant;
 }
 
 void Tividy::loadDefinition(const std::string& name) {
@@ -47,6 +68,61 @@ std::string Tividy::startInstance(const std::string& definition) {
     instance->start();
     instances_[id.str()] = std::move(instance);
     return id.str();
+}
+
+void Tividy::assign(const std::string& instanceId, const std::string& itemId,
+                    const std::string& participant) {
+    WorkItem& item = findItem(instanceId, itemId);
+    Participant& assignee = findParticipant(participant);
+
+    // Only an Assigned item still counts towards its previous assignee's load;
+    // a rejected item released it when it was rejected.
+    Participant* previous = nullptr;
+    if (item.status() == WorkItem::ASSIGNED) {
+        previous = organisation_.find(item.assignee());
+    }
+
+    item.assign(participant);
+    if (previous != nullptr) {
+        previous->addLoad(-1);
+    }
+    assignee.addLoad(1);
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new AssignCommand(itemId, participant)));
+}
+
+void Tividy::start(const std::string& instanceId, const std::string& itemId) {
+    findItem(instanceId, itemId).start();
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new StartCommand(itemId)));
+}
+
+void Tividy::complete(const std::string& instanceId, const std::string& itemId) {
+    findItem(instanceId, itemId).complete();
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new CompleteCommand(itemId)));
+}
+
+void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
+    WorkflowInstance& instance = findInstance(instanceId);
+    WorkItem& item = findItem(instanceId, itemId);
+
+    item.approve();
+    Participant* assignee = organisation_.find(item.assignee());
+    if (assignee != nullptr) {
+        assignee->addLoad(-1);
+    }
+    instance.advance();
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new ApproveCommand(itemId, true, "")));
+}
+
+void Tividy::reject(const std::string& instanceId, const std::string& itemId,
+                    const std::string& reason) {
+    WorkItem& item = findItem(instanceId, itemId);
+
+    item.reject(reason);
+    Participant* assignee = organisation_.find(item.assignee());
+    if (assignee != nullptr) {
+        assignee->addLoad(-1);
+    }
+    invoker_.invoke(std::unique_ptr<WorkCommand>(new RejectCommand(itemId, reason)));
 }
 
 const WorkflowInstance& Tividy::instance(const std::string& instanceId) const {
