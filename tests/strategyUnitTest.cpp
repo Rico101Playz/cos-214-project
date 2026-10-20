@@ -10,6 +10,7 @@
 #include "core/WorkItem.h"
 #include "patterns/execution/AssignmentStrategy.h"
 #include "patterns/execution/RoleBasedAssignment.h"
+#include "patterns/execution/LeastLoadedAssignment.h"
 
 // ============================================================================
 // TEST: Participant
@@ -175,6 +176,63 @@ void test_RoleBasedAssignment() {
 }
 
 // ============================================================================
+// TEST: LeastLoadedAssignment
+// ============================================================================
+void test_LeastLoadedAssignment() {
+    std::cout << "\n--- Testing LeastLoadedAssignment ---\n";
+
+    Organisation org("Acme Software");
+    buildFeatureDeliveryTeam(org);
+    WorkItem frontend("F07", "Implement frontend", "Developer");
+
+    LeastLoadedAssignment leastLoaded;
+    const AssignmentStrategy& strategy = leastLoaded;
+
+    check(strategy.name() == "LeastLoaded", "LeastLoaded: reports its name");
+
+    Participant* chosen = strategy.assign(frontend, frontend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Alice",
+          "LeastLoaded: on equal load the first registered participant wins");
+
+    org.find("Alice")->addLoad(3);
+    org.find("Bob")->addLoad(1);
+    chosen = strategy.assign(frontend, frontend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Cara",
+          "LeastLoaded: picks the participant with the lowest load");
+
+    org.find("Cara")->setAvailable(false);
+    chosen = strategy.assign(frontend, frontend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Bob",
+          "LeastLoaded: an unavailable participant is not chosen even with the lowest load");
+
+    check(strategy.assign(frontend, "Release Manager", org)->name() == "Rex",
+          "LeastLoaded: works for a role with a single holder");
+    check(strategy.assign(frontend, "Astronaut", org) == nullptr,
+          "LeastLoaded: returns nullptr for a role nobody holds");
+
+    // Same team, same item: the two strategies genuinely differ.
+    RoleBasedAssignment roleBased;
+    org.find("Cara")->setAvailable(true);
+    check(roleBased.assign(frontend, "Developer", org)->name() == "Alice" &&
+              strategy.assign(frontend, "Developer", org)->name() == "Cara",
+          "LeastLoaded: gives a different answer to RoleBased for the same item and team");
+
+    // A busy team: handing out items one after another spreads the work.
+    Organisation busy("Busy Team");
+    buildFeatureDeliveryTeam(busy);
+    std::string order;
+    for (int i = 0; i < 4; ++i) {
+        WorkItem item("T" + std::to_string(i), "Task", "Developer");
+        Participant* p = strategy.assign(item, item.role(), busy);
+        p->addLoad(1);          // the caller records the assignment
+        order += p->name();
+        order += " ";
+    }
+    check(order == "Alice Bob Cara Alice ",
+          "LeastLoaded: successive assignments rotate through the team as load builds");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -186,6 +244,7 @@ void run_strategy_tests() {
     test_Organisation();
     test_WorkItem();
     test_RoleBasedAssignment();
+    test_LeastLoadedAssignment();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
