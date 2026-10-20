@@ -1,18 +1,16 @@
 #include "patterns/execution/CommandInvoker.h"
 
-void CommandInvoker::invoke(std::unique_ptr<WorkCommand> command) {
+void CommandInvoker::invoke(std::unique_ptr<WorkCommand> command, WorkflowInstance* instance) {
     if (command) {
-        command->execute();
+        command->execute(instance);
         history.push_back(std::move(command));
     }
 }
 
-void CommandInvoker::undoLast() {
+void CommandInvoker::undoLast(WorkflowInstance* instance) {
     if (!history.empty()) {
-
         auto cmd = std::move(history.back());
         history.pop_back();
-        
-        cmd->undo(); 
+        cmd->undo(instance);
     }
 }

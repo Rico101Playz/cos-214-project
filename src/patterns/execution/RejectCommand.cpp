@@ -1,9 +1,9 @@
 #include "patterns/execution/RejectCommand.h"
 
-RejectCommand::RejectCommand(const std::string& itemId, const std::string& reason)
-    : itemId(itemId), reason(reason) {}
+RejectCommand::RejectCommand(SnapshotStore* store, std::string instanceId, const std::string& itemId, const std::string& reason)
+    : WorkCommand(store, std::move(instanceId)), itemId(itemId), reason(reason) {}
 
-void RejectCommand::perform() {}
+void RejectCommand::perform(WorkflowInstance* instance) {}
 
 std::string RejectCommand::describe() const {
     return "RejectCommand: item=" + itemId + ", reason=" + reason;

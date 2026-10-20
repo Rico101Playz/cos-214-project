@@ -3,6 +3,7 @@
 
 void run_command_tests();
 void run_builder_tests();
+void run_memento_test();
 void run_strategy_tests();
 void run_composite_tests();
 void run_iterator_tests();
@@ -16,7 +17,9 @@ int main() {
 
     run_command_tests();
     run_builder_tests();
+    run_memento_test();
     run_strategy_tests();
+
     run_composite_tests();
     run_iterator_tests();
     run_workflow_instance_tests();

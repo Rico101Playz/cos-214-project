@@ -4,9 +4,17 @@
 
 #include "test_utils.h"
 
+// Core
+#include "core/WorkflowInstance.h"
+#include "core/WorkItem.h"
+
+// Patterns
 #include "patterns/execution/WorkCommand.h"
 #include "patterns/execution/CommandHistory.h"
 #include "patterns/execution/CommandInvoker.h"
+#include "patterns/execution/Memento.h"
+
+// Concrete Commands
 #include "patterns/execution/AddWorkCommand.h"
 #include "patterns/execution/AssignCommand.h"
 #include "patterns/execution/StartCommand.h"
@@ -19,20 +27,17 @@
 #include "patterns/execution/SetDataCommand.h"
 
 // ============================================================================
-// SIMPLE TEST RUNNER
-// ============================================================================
-
-// ============================================================================
 // TEST: CommandHistory Management
 // ============================================================================
 void test_CommandHistory() {
     std::cout << "\n--- Testing CommandHistory ---\n";
     
     CommandHistory history;
+    SnapshotStore store;
     
     check(history.canUndo() == false, "CommandHistory: empty initially");
 
-    history.push(std::unique_ptr<WorkCommand>(new StartCommand("Item1")));
+    history.push(std::unique_ptr<WorkCommand>(new StartCommand(&store, "WF-01", "Item1")));
     check(history.canUndo() == true, "CommandHistory: canUndo() after push");
     
     std::unique_ptr<WorkCommand> cmd = history.pop();
@@ -49,14 +54,19 @@ void test_CommandHistory() {
 void test_CommandInvoker() {
     std::cout << "\n--- Testing CommandInvoker ---\n";
     
+    SnapshotStore store;
     CommandInvoker invoker;
     
-    std::unique_ptr<WorkCommand> cmd(new CompleteCommand("Item2"));
-    invoker.invoke(std::move(cmd));
+    auto instance = std::make_shared<WorkflowInstance>("WF-01", InstanceStatus::Active);
+    instance->addItem(std::make_shared<WorkItem>("Item2"));
+
+    std::unique_ptr<WorkCommand> cmd(new CompleteCommand(&store, "WF-01", "Item2"));
+    invoker.invoke(std::move(cmd), instance.get());
+    
     check(true, "CommandInvoker: invoke() successfully executes CompleteCommand");
     
-    invoker.undoLast();
-    check(true, "CommandInvoker: undoLast() does not crash");
+    invoker.undoLast(instance.get());
+    check(true, "CommandInvoker: undoLast() does not crash and undoes via Memento");
 }
 
 // ============================================================================
@@ -65,59 +75,74 @@ void test_CommandInvoker() {
 void test_ConcreteCommands() {
     std::cout << "\n--- Testing Concrete Commands ---\n";
     
-    AddWorkCommand addCmd("Stage1");
+    SnapshotStore store;
+    auto instance = std::make_shared<WorkflowInstance>("WF-01", InstanceStatus::Active);
+    instance->addItem(std::make_shared<WorkItem>("Item4"));
+    auto item = std::make_shared<WorkItem>("Item5");
+    
+    // --- AddWorkCommand ---
+    AddWorkCommand addCmd(&store, "WF-01", "Stage1",item );
     check(addCmd.describe() == "AddWorkCommand: stage=Stage1", "AddWorkCommand describe()");
-    addCmd.execute();
+    addCmd.execute(instance.get());
     check(true, "AddWorkCommand execute() runs");
 
-    AssignCommand assignCmd("Item1", "Alice");
+    // --- AssignCommand ---
+    AssignCommand assignCmd(&store, "WF-01", "Item1", "Alice");
     check(assignCmd.describe() == "AssignCommand: item=Item1, participant=Alice", "AssignCommand describe()");
-    assignCmd.execute();
+    assignCmd.execute(instance.get());
     check(true, "AssignCommand execute() runs");
 
-    StartCommand startCmd("Item2");
+    // --- StartCommand ---
+    StartCommand startCmd(&store, "WF-01", "Item2");
     check(startCmd.describe() == "StartCommand: item=Item2", "StartCommand describe()");
-    startCmd.execute();
+    startCmd.execute(instance.get());
     check(true, "StartCommand execute() runs");
 
-    CompleteCommand completeCmd("Item3");
+    // --- CompleteCommand ---
+    CompleteCommand completeCmd(&store, "WF-01", "Item3");
     check(completeCmd.describe() == "CompleteCommand: item=Item3", "CompleteCommand describe()");
-    completeCmd.execute();
+    completeCmd.execute(instance.get());
     check(true, "CompleteCommand execute() runs");
 
-    ApproveCommand approveCmd("Item4", true, "Looks good");
+    // --- ApproveCommand ---
+    ApproveCommand approveCmd(&store, "WF-01", "Item4", true, "Looks good");
     check(approveCmd.describe() == "ApproveCommand: item=Item4, approved=true, comment=Looks good", "ApproveCommand describe()");
-    approveCmd.execute();
+    approveCmd.execute(instance.get());
     check(true, "ApproveCommand execute() runs");
 
-    RejectCommand rejectCmd("Item5", "Missing data");
+    // --- RejectCommand ---
+    RejectCommand rejectCmd(&store, "WF-01", "Item5", "Missing data");
     check(rejectCmd.describe() == "RejectCommand: item=Item5, reason=Missing data", "RejectCommand describe()");
-    rejectCmd.execute();
+    rejectCmd.execute(instance.get());
     check(true, "RejectCommand execute() runs");
 
-    EscalateCommand escalateCmd("Item6");
+    // --- EscalateCommand ---
+    EscalateCommand escalateCmd(&store, "WF-01", "Item6");
     check(escalateCmd.describe() == "EscalateCommand: item=Item6", "EscalateCommand describe()");
-    escalateCmd.execute();
+    escalateCmd.execute(instance.get());
     check(true, "EscalateCommand execute() runs");
 
-    InvokeCommand invokeCmd("Item7", "API_CALL");
+    // --- InvokeCommand ---
+    InvokeCommand invokeCmd(&store, "WF-01", "Item7", "API_CALL");
     check(invokeCmd.describe() == "InvokeCommand: item=Item7, operation=API_CALL", "InvokeCommand describe()");
-    invokeCmd.execute();
+    invokeCmd.execute(instance.get());
     check(true, "InvokeCommand execute() runs");
 
-    CancelCommand cancelCmd("Node1", "Timeout");
+    // --- CancelCommand ---
+    CancelCommand cancelCmd(&store, "WF-01", "Node1", "Timeout");
     check(cancelCmd.describe() == "CancelCommand: node=Node1, reason=Timeout", "CancelCommand describe()");
-    cancelCmd.execute();
+    cancelCmd.execute(instance.get());
     check(true, "CancelCommand execute() runs");
 
-    SetDataCommand setDataCmd("Node2", "color", "blue");
+    // --- SetDataCommand ---
+    SetDataCommand setDataCmd(&store, "WF-01", "Node2", "color", "blue");
     check(setDataCmd.describe() == "SetDataCommand: node=Node2, key=color, value=blue", "SetDataCommand describe()");
-    setDataCmd.execute();
+    setDataCmd.execute(instance.get());
     check(true, "SetDataCommand execute() runs");
 }
 
 // ============================================================================
-// MAIN
+// MAIN RUNNER
 // ============================================================================
 void run_command_tests() {
     std::cout << "\n--- Running Command Tests ---\n";

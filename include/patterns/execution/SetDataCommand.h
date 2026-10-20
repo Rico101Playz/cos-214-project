@@ -11,10 +11,10 @@ private:
     std::string value;
 
 protected:
-    void perform() override;
+    void perform(WorkflowInstance* instance) override;
 
 public:
-    SetDataCommand(const std::string& nodeId, const std::string& key, const std::string& value);
+    SetDataCommand(SnapshotStore* store, std::string instanceId, const std::string& nodeId, const std::string& key, const std::string& value);
     std::string describe() const override;
 };
 

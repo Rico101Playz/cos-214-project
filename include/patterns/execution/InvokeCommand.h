@@ -10,10 +10,10 @@ private:
     std::string operation;
 
 protected:
-    void perform() override;
+    void perform(WorkflowInstance* instance) override;
 
 public:
-    InvokeCommand(const std::string& itemId, const std::string& operation);
+    InvokeCommand(SnapshotStore* store, std::string instanceId, const std::string& itemId, const std::string& operation);
     std::string describe() const override;
 };
 

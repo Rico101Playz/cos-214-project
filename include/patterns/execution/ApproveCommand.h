@@ -4,6 +4,8 @@
 #include "WorkCommand.h"
 #include <string>
 
+class WorkflowInstance;
+
 class ApproveCommand : public WorkCommand {
 private:
     std::string itemId;
@@ -11,10 +13,11 @@ private:
     std::string comment;
 
 protected:
-    void perform() override;
+    void perform(WorkflowInstance* instance) override;
 
 public:
-    ApproveCommand(const std::string& itemId, bool approved, const std::string& comment);
+    ApproveCommand(SnapshotStore* store, std::string instanceId, const std::string& itemId, bool approved, const std::string& comment);
+                   
     std::string describe() const override;
 };
 
