@@ -8,6 +8,8 @@
 #include "core/Participant.h"
 #include "core/Organisation.h"
 #include "core/WorkItem.h"
+#include "patterns/execution/AssignmentStrategy.h"
+#include "patterns/execution/RoleBasedAssignment.h"
 
 // ============================================================================
 // TEST: Participant
@@ -116,6 +118,63 @@ void test_WorkItem() {
 }
 
 // ============================================================================
+// SCENARIO HELPER: the Software Feature Delivery team (Task 2 scenario)
+// ============================================================================
+static void buildFeatureDeliveryTeam(Organisation& org) {
+    org.addParticipant("Pia", "Product Owner");
+    org.addParticipant("Alice", "Developer");
+    org.addParticipant("Bob", "Developer");
+    org.addParticipant("Cara", "Developer");
+    org.addParticipant("Rita", "Reviewer");
+    org.addParticipant("Sam", "QA Tester");
+    org.addParticipant("Tess", "Tech Lead");
+    org.addParticipant("Rex", "Release Manager");
+}
+
+// ============================================================================
+// TEST: RoleBasedAssignment
+// ============================================================================
+void test_RoleBasedAssignment() {
+    std::cout << "\n--- Testing RoleBasedAssignment ---\n";
+
+    Organisation org("Acme Software");
+    buildFeatureDeliveryTeam(org);
+    WorkItem backend("F06", "Implement backend", "Developer");
+
+    RoleBasedAssignment roleBased;
+    const AssignmentStrategy& strategy = roleBased;   // used through the interface
+
+    check(strategy.name() == "RoleBased", "RoleBased: reports its name");
+
+    Participant* chosen = strategy.assign(backend, backend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Alice",
+          "RoleBased: picks the first available participant with the role");
+
+    org.find("Alice")->addLoad(5);
+    chosen = strategy.assign(backend, backend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Alice",
+          "RoleBased: ignores workload (still Alice although she is busiest)");
+    check(org.find("Alice")->load() == 5,
+          "RoleBased: choosing does not change anyone's load");
+
+    org.find("Alice")->setAvailable(false);
+    chosen = strategy.assign(backend, backend.role(), org);
+    check(chosen != nullptr && chosen->name() == "Bob",
+          "RoleBased: skips an unavailable participant");
+
+    chosen = strategy.assign(backend, "Reviewer", org);
+    check(chosen != nullptr && chosen->name() == "Rita",
+          "RoleBased: uses the role it is given, not the item's own role");
+
+    org.find("Rex")->setAvailable(false);
+    chosen = strategy.assign(backend, "Release Manager", org);
+    check(chosen == nullptr, "RoleBased: returns nullptr when nobody is eligible");
+
+    chosen = strategy.assign(backend, "Astronaut", org);
+    check(chosen == nullptr, "RoleBased: returns nullptr for a role nobody holds");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -126,6 +185,7 @@ void run_strategy_tests() {
     test_Participant();
     test_Organisation();
     test_WorkItem();
+    test_RoleBasedAssignment();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
