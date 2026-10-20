@@ -69,7 +69,7 @@ void InstanceMemento::addApproval(ApprovalSnapshot approval) {
 // ---------------------------------------------------------
 // SnapshotStore
 // ---------------------------------------------------------
-void SnapshotStore::save(const std::string& instanceId, std::unique_ptr<InstanceMemento> memento) {
+void SnapshotStore::save(const std::string& instanceId, std::shared_ptr<InstanceMemento> memento) {
     if (!memento) return;
     std::string label = memento->getLabel();
     snapshots[instanceId][label] = std::move(memento);

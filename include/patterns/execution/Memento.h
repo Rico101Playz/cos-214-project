@@ -78,12 +78,12 @@ public:
 // ---------------------------------------------------------
 class SnapshotStore {
 private:
-    std::map<std::string, std::map<std::string, std::unique_ptr<InstanceMemento>>> snapshots;
+    std::map<std::string, std::map<std::string, std::shared_ptr<InstanceMemento>>> snapshots;
 
 public:
     ~SnapshotStore() = default;
 
-    void save(const std::string& instanceId, std::unique_ptr<InstanceMemento> memento);
+    void save(const std::string& instanceId, std::shared_ptr<InstanceMemento> memento);
     InstanceMemento* get(const std::string& instanceId, const std::string& label) const;
     bool has(const std::string& instanceId, const std::string& label) const;
 };

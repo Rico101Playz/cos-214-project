@@ -3,6 +3,7 @@
 
 void run_command_tests();
 void run_builder_tests();
+void run_memento_test();
 
 int main() {
     std::cout << "========================================\n";
@@ -11,6 +12,7 @@ int main() {
 
     run_command_tests();
     run_builder_tests();
+    run_memento_test();
     
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, " 
