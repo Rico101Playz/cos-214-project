@@ -15,7 +15,7 @@ int main() {
     run_builder_tests();
     run_memento_test();
     run_strategy_tests();
-    
+
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, " 
               << testsFailed << " failed.\n";
