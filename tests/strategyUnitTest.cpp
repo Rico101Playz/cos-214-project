@@ -14,6 +14,9 @@
 #include "patterns/execution/LeastLoadedAssignment.h"
 #include "patterns/execution/RuleBasedAssignment.h"
 #include "patterns/execution/AssignmentService.h"
+#include "patterns/creation/ConcreteDefinitionBuilder.h"
+#include "patterns/creation/FeatureDeliveryProcess.h"
+#include "core/WorkflowDefinition.h"
 
 // ============================================================================
 // TEST: Participant
@@ -360,6 +363,92 @@ void test_AssignmentService() {
 }
 
 // ============================================================================
+// TEST: Scenario - Feature Delivery (Builder output + Strategy together)
+// ============================================================================
+void test_FeatureDeliveryScenario() {
+    std::cout << "\n--- Testing Feature Delivery scenario (Builder + Strategy) ---\n";
+
+    // 1. The Builder (already on dev) produces the Feature Delivery definition.
+    ConcreteDefinitionBuilder builder;
+    FeatureDeliveryProcess process;
+    process.construct(&builder);
+    WorkflowDefinition definition = builder.build();
+    check(definition.items.size() == 2, "Scenario: the Builder's definition provides work items to assign");
+
+    // 2. Each item in the definition becomes a work item for a Developer, and the
+    //    team's policy decides who gets it. Busy team => least loaded.
+    Organisation org("Acme Software");
+    buildFeatureDeliveryTeam(org);
+    AssignmentService service(org);
+    service.setStrategy(std::unique_ptr<AssignmentStrategy>(new LeastLoadedAssignment()));
+
+    std::string leastLoadedOrder;
+    for (std::size_t i = 0; i < definition.items.size(); ++i) {
+        WorkItem item("I" + std::to_string(i), definition.items[i], "Developer");
+        Participant* p = service.chooseAssignee(item, item.role());
+        p->addLoad(1);   // recording the assignment is the caller's job
+        leastLoadedOrder += p->name() + " ";
+    }
+    check(leastLoadedOrder == "Alice Bob ",
+          "Scenario: least-loaded spreads the definition's items across developers");
+
+    // 3. A small team uses the simple policy instead: the same items all go to one person.
+    Organisation smallTeam("Small Team");
+    buildFeatureDeliveryTeam(smallTeam);
+    AssignmentService smallService(smallTeam);   // default RoleBased
+    std::string roleBasedOrder;
+    for (std::size_t i = 0; i < definition.items.size(); ++i) {
+        WorkItem item("I" + std::to_string(i), definition.items[i], "Developer");
+        Participant* p = smallService.chooseAssignee(item, item.role());
+        p->addLoad(1);
+        roleBasedOrder += p->name() + " ";
+    }
+    check(roleBasedOrder == "Alice Alice ",
+          "Scenario: the same definition under role-based assignment piles on the first developer");
+
+    // 4. Walk the work items of the Feature Delivery activity diagram (F06 - F20).
+    Organisation company("Acme Software");
+    buildFeatureDeliveryTeam(company);
+    AssignmentService delivery(company);
+    RuleBasedAssignment* policy = new RuleBasedAssignment(
+        std::unique_ptr<AssignmentStrategy>(new LeastLoadedAssignment()));
+    policy->addRule("Reviewer", "risk", "high", "Tech Lead");   // F16: high-risk goes to the Tech Lead
+    delivery.setStrategy(std::unique_ptr<AssignmentStrategy>(policy));
+
+    WorkItem f06("F06", "Implement backend and unit tests", "Developer");
+    WorkItem f07("F07", "Implement frontend and unit tests", "Developer");
+    WorkItem f08("F08", "Write feature and release documentation", "Developer");
+    WorkItem f11("F11", "Obtain first code approval", "Reviewer");
+    WorkItem f15("F15", "QA verifies acceptance criteria", "QA Tester");
+    WorkItem f16("F16", "Security review", "Reviewer");
+    f16.setData("risk", "high");
+    WorkItem f20("F20", "Release Manager approval", "Release Manager");
+
+    std::string devOrder;
+    WorkItem* parallelWork[3] = { &f06, &f07, &f08 };   // the F06/F07/F08 parallel fork
+    for (int i = 0; i < 3; ++i) {
+        Participant* p = delivery.chooseAssignee(*parallelWork[i], parallelWork[i]->role());
+        p->addLoad(1);
+        devOrder += p->name() + " ";
+    }
+    check(devOrder == "Alice Bob Cara ",
+          "Scenario: the three parallel implementation items go to three different developers");
+
+    check(delivery.chooseAssignee(f11, f11.role())->name() == "Rita", "Scenario: F11 code review goes to the Reviewer");
+    check(delivery.chooseAssignee(f15, f15.role())->name() == "Sam", "Scenario: F15 QA verification goes to QA");
+    check(delivery.chooseAssignee(f16, f16.role())->name() == "Tess",
+          "Scenario: F16 high-risk security review is routed to the Tech Lead");
+
+    // 5. Activity A04: nobody holds the role right now, so the item waits.
+    company.find("Rex")->setAvailable(false);
+    check(delivery.chooseAssignee(f20, f20.role()) == nullptr,
+          "Scenario: F20 has no eligible Release Manager, so assignment waits (A04)");
+    company.find("Rex")->setAvailable(true);
+    check(delivery.chooseAssignee(f20, f20.role())->name() == "Rex",
+          "Scenario: once the Release Manager is available F20 is assigned");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -374,6 +463,7 @@ void run_strategy_tests() {
     test_LeastLoadedAssignment();
     test_RuleBasedAssignment();
     test_AssignmentService();
+    test_FeatureDeliveryScenario();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
