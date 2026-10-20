@@ -7,3 +7,6 @@ run_tests
 run_tests.exe
 
 build/
+
+# ignore ide settings vscode
+.vscode/
