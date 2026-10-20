@@ -93,7 +93,9 @@ cos-214-project/
 │   ├── main_test.cpp           # Custom test runner main entry
 │   ├── test_utils.h / .cpp     # Shared testing utilities
 │   ├── commandUnitTest.cpp     # Command pattern tests
-│   └── builderUnitTest.cpp     # Builder pattern tests
+│   ├── builderUnitTest.cpp     # Builder pattern tests
+│   ├── compositeUnitTest.cpp   # Work tree (WorkNode, CompositeStage, WorkItem lifecycle) tests
+│   └── iteratorUnitTest.cpp    # Iterator pattern tests
 └── docs/                       # Project Documentation
     ├── diagrams/               # Activity, class, sequence, and state diagrams
     ├── research/               # Research findings and references
