@@ -7,6 +7,7 @@
 
 #include "core/Participant.h"
 #include "core/Organisation.h"
+#include "core/WorkItem.h"
 
 // ============================================================================
 // TEST: Participant
@@ -91,6 +92,30 @@ void test_Organisation() {
 }
 
 // ============================================================================
+// TEST: WorkItem (minimal core item)
+// ============================================================================
+void test_WorkItem() {
+    std::cout << "\n--- Testing WorkItem ---\n";
+
+    WorkItem backend("F06", "Implement backend", "Developer");
+
+    check(backend.id() == "F06", "WorkItem: stores its id");
+    check(backend.name() == "Implement backend", "WorkItem: stores its name");
+    check(backend.role() == "Developer", "WorkItem: stores the role that should do it");
+
+    check(backend.hasData("risk") == false, "WorkItem: has no data initially");
+    check(backend.getData("risk") == "", "WorkItem: missing data defaults to an empty string");
+    check(backend.getData("risk", "normal") == "normal", "WorkItem: missing data uses the given fallback");
+
+    backend.setData("risk", "high");
+    check(backend.hasData("risk") == true, "WorkItem: setData() stores a value");
+    check(backend.getData("risk", "normal") == "high", "WorkItem: getData() returns the stored value");
+
+    backend.setData("risk", "low");
+    check(backend.getData("risk") == "low", "WorkItem: setData() overwrites an existing value");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_strategy_tests() {
@@ -100,6 +125,7 @@ void run_strategy_tests() {
 
     test_Participant();
     test_Organisation();
+    test_WorkItem();
 
     std::cout << "Strategy Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
