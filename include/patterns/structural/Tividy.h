@@ -82,7 +82,7 @@ public:
     const WorkflowInstance& instance(const std::string& instanceId) const;
     // Ids of the items in the instance that can be picked up right now.
     std::vector<std::string> readyItems(const std::string& instanceId) const;
-    // Overall progress of the instance, 0.0 .. 1.0.
+    // The share of the instance's work items that are complete, 0.0 .. 1.0.
     double progress(const std::string& instanceId) const;
 };
 

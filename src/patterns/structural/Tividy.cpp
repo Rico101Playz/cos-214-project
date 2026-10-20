@@ -172,5 +172,18 @@ std::vector<std::string> Tividy::readyItems(const std::string& instanceId) const
 }
 
 double Tividy::progress(const std::string& instanceId) const {
-    return findInstance(instanceId).root().progress();
+    // Counted per work item, so an empty stage does not inflate the figure.
+    int total = 0;
+    int done = 0;
+    DepthFirstIterator it(&findInstance(instanceId).root());
+    for (it.first(); !it.isDone(); it.next()) {
+        WorkItem* item = dynamic_cast<WorkItem*>(it.currentItem());
+        if (item != nullptr) {
+            ++total;
+            if (item->isComplete()) {
+                ++done;
+            }
+        }
+    }
+    return total == 0 ? 1.0 : static_cast<double>(done) / total;
 }
