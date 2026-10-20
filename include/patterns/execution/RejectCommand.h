@@ -10,10 +10,10 @@ private:
     std::string reason;
 
 protected:
-    void perform() override;
+    void perform(WorkflowInstance* instance) override;
 
 public:
-    RejectCommand(const std::string& itemId, const std::string& reason);
+    RejectCommand(SnapshotStore* store, std::string instanceId, const std::string& itemId, const std::string& reason);
     std::string describe() const override;
 };
 

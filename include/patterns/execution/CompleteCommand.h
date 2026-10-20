@@ -9,10 +9,10 @@ private:
     std::string itemId;
 
 protected:
-    void perform() override;
+    void perform(WorkflowInstance* instance) override;
 
 public:
-    explicit CompleteCommand(const std::string& itemId);
+    explicit CompleteCommand(SnapshotStore* store, std::string instanceId, const std::string& itemId);
     std::string describe() const override;
 };
 

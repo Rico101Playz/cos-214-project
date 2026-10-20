@@ -10,7 +10,7 @@ ApproveCommand::ApproveCommand(SnapshotStore* store, std::string instanceId,
 
 void ApproveCommand::perform(WorkflowInstance* instance) {
     if (instance) {
-        instance->approveItem(itemId, approved);
+        instance->approveItem(itemId, approved, comment);
     }
 }
 

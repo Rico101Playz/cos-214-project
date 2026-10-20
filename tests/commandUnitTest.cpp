@@ -75,13 +75,13 @@ void test_CommandInvoker() {
 void test_ConcreteCommands() {
     std::cout << "\n--- Testing Concrete Commands ---\n";
     
-    // We need a store and instance for all commands now
     SnapshotStore store;
     auto instance = std::make_shared<WorkflowInstance>("WF-01", InstanceStatus::Active);
     instance->addItem(std::make_shared<WorkItem>("Item4"));
-
+    auto item = std::make_shared<WorkItem>("Item5");
+    
     // --- AddWorkCommand ---
-    AddWorkCommand addCmd(&store, "WF-01", "Stage1", ItemTemplate());
+    AddWorkCommand addCmd(&store, "WF-01", "Stage1",item );
     check(addCmd.describe() == "AddWorkCommand: stage=Stage1", "AddWorkCommand describe()");
     addCmd.execute(instance.get());
     check(true, "AddWorkCommand execute() runs");

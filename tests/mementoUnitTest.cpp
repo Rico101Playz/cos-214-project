@@ -2,6 +2,8 @@
 #include <string>
 #include <memory>
 
+#include "test_utils.h"
+
 #include "core/WorkflowInstance.h"
 #include "patterns/execution/ApproveCommand.h"
 #include "patterns/execution/CommandInvoker.h"
@@ -10,19 +12,6 @@
 // ============================================================================
 // SIMPLE TEST RUNNER
 // ============================================================================
-int testsPassed = 0;
-int testsFailed = 0;
-
-void check(bool condition, const std::string& testName) {
-    if (condition) {
-        std::cout << "[PASS] " << testName << "\n";
-        testsPassed++;
-    } else {
-        std::cerr << "[FAIL] " << testName << "\n";
-        testsFailed++;
-    }
-}
-
 // ============================================================================
 // TEST: ApproveCommand with Memento & CommandInvoker
 // ============================================================================
@@ -39,13 +28,13 @@ void test_ApproveCommand_And_Undo() {
     check(instance->getItem("Task-1")->state == "Pending", 
           "Initial state should be 'Pending'");
 
-    auto cmd = std::make_unique<ApproveCommand>(
-        &store, 
-        instance->getId(), 
-        "Task-1", 
-        true, 
+    auto cmd = std::unique_ptr<ApproveCommand>(new ApproveCommand(
+        &store,
+        instance->getId(),
+        "Task-1",
+        true,
         "Looks good"
-    );
+    ));
 
     invoker.invoke(std::move(cmd), instance.get());
 
