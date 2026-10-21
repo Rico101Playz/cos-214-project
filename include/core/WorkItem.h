@@ -28,6 +28,7 @@ public:
 
 private:
     std::string role_;
+    std::string assignee_;
     std::map<std::string, std::string> data_;
 
 protected:
@@ -38,7 +39,6 @@ protected:
 public:
     std::string itemId;
     std::string state;
-    std::string assignee;
 
     WorkItem(std::string id) : WorkNode(id, id), status_(CREATED), itemId(std::move(id)), state("Pending") {}
     WorkItem(const std::string& id, const std::string& name, const std::string& role);
@@ -47,6 +47,8 @@ public:
     const std::string& role() const;
     const std::string& status() const;
     const std::string& reason() const;
+    const std::string& assignee() const;
+    void setAssignee(const std::string& participant);
 
     void setData(const std::string& key, const std::string& value);
     bool hasData(const std::string& key) const;

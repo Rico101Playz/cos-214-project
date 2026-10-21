@@ -7,7 +7,7 @@
 
 std::string AwaitingApprovalState::name() const { return "AwaitingApproval"; }
 
-void AwaitingApprovalState::complete(LeafWorkItem& item) {
+void AwaitingApprovalState::approve(LeafWorkItem& item) {
     item.transitionTo(std::unique_ptr<WorkItemState>(new CompletedState()));
 }
 

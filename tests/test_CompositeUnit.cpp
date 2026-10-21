@@ -156,7 +156,7 @@ static void test_LeafMatchesPlainWorkItem() {
     plain.assign("amy");    leaf.assign("amy");
     check(plain.status() == leaf.status(), "Drop-in: same status after assign");
     plain.assign("ben");    leaf.assign("ben");
-    check(plain.status() == leaf.status() && plain.assignee == leaf.assignee, "Drop-in: same behaviour on reassignment");
+    check(plain.status() == leaf.status() && plain.assignee() == leaf.assignee(), "Drop-in: same behaviour on reassignment");
     plain.start();          leaf.start();
     plain.complete();       leaf.complete();
     check(plain.status() == leaf.status(), "Drop-in: same status after complete");

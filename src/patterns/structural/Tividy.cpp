@@ -42,6 +42,11 @@ Participant& Tividy::findParticipant(const std::string& name) const {
     return *participant;
 }
 
+void Tividy::record(const std::string& instanceId, WorkCommand* command) {
+    invoker_.invoke(std::unique_ptr<WorkCommand>(command), &findInstance(instanceId));
+    commandInstances_.push_back(instanceId);
+}
+
 void Tividy::loadDefinition(const std::string& name) {
     ConcreteDefinitionBuilder builder;
     FeatureDeliveryProcess process;
@@ -89,17 +94,17 @@ void Tividy::assign(const std::string& instanceId, const std::string& itemId,
         previous->addLoad(-1);
     }
     assignee.addLoad(1);
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new AssignCommand(itemId, participant)));
+    record(instanceId, new AssignCommand(&snapshots_, instanceId, itemId, participant));
 }
 
 void Tividy::start(const std::string& instanceId, const std::string& itemId) {
     findItem(instanceId, itemId).start();
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new StartCommand(itemId)));
+    record(instanceId, new StartCommand(&snapshots_, instanceId, itemId));
 }
 
 void Tividy::complete(const std::string& instanceId, const std::string& itemId) {
     findItem(instanceId, itemId).complete();
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new CompleteCommand(itemId)));
+    record(instanceId, new CompleteCommand(&snapshots_, instanceId, itemId));
 }
 
 void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
@@ -112,7 +117,7 @@ void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
         assignee->addLoad(-1);
     }
     instance.advance();
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new ApproveCommand(itemId, true, "")));
+    record(instanceId, new ApproveCommand(&snapshots_, instanceId, itemId, true, ""));
 }
 
 void Tividy::reject(const std::string& instanceId, const std::string& itemId,
@@ -124,7 +129,7 @@ void Tividy::reject(const std::string& instanceId, const std::string& itemId,
     if (assignee != nullptr) {
         assignee->addLoad(-1);
     }
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new RejectCommand(itemId, reason)));
+    record(instanceId, new RejectCommand(&snapshots_, instanceId, itemId, reason));
 }
 
 void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
@@ -151,11 +156,16 @@ void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
     for (std::size_t i = 0; i < busy.size(); ++i) {
         busy[i]->addLoad(-1);
     }
-    invoker_.invoke(std::unique_ptr<WorkCommand>(new CancelCommand(instanceId, reason)));
+    record(instanceId, new CancelCommand(&snapshots_, instanceId, instanceId, reason));
 }
 
 void Tividy::undo() {
-    invoker_.undoLast();
+    if (commandInstances_.empty()) {
+        return;
+    }
+    std::string instanceId = commandInstances_.back();
+    commandInstances_.pop_back();
+    invoker_.undoLast(&findInstance(instanceId));
 }
 
 const WorkflowInstance& Tividy::instance(const std::string& instanceId) const {

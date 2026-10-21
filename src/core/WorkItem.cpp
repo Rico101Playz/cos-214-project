@@ -34,6 +34,10 @@ std::string WorkItem::getData(const std::string& key, const std::string& fallbac
 const std::string& WorkItem::status() const { return status_; }
 
 
+const std::string& WorkItem::assignee() const { return assignee_; }
+
+void WorkItem::setAssignee(const std::string& participant) { assignee_ = participant; }
+
 const std::string& WorkItem::reason() const { return reason_; }
 
 void WorkItem::require(const std::string& action, const char* const allowed[], int count) const {
@@ -54,7 +58,7 @@ void WorkItem::makeAvailable() {
 void WorkItem::assign(const std::string& participant) {
     const char* const allowed[] = { AVAILABLE, ASSIGNED, REJECTED };
     require("assign", allowed, 3);
-    assignee = participant;
+    assignee_ = participant;
     reason_.clear();
     status_ = ASSIGNED;
 }

@@ -9,6 +9,7 @@
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
 #include "patterns/execution/CommandInvoker.h"
+#include "patterns/execution/Memento.h"
 
 // FACADE pattern - the FACADE.
 //
@@ -17,8 +18,9 @@
 // work tree, iterators or organisation behind it.
 //
 // Each work item operation updates the instance and is then recorded as the
-// matching WorkCommand through the CommandInvoker, so the command history
-// sees every action taken through the engine.
+// matching WorkCommand through the CommandInvoker, which snapshots the
+// instance into the SnapshotStore, so the command history sees every action
+// taken through the engine.
 //
 // Every call that names something unknown (definition, instance, item or
 // participant) throws std::invalid_argument; a call the item's or instance's
@@ -29,8 +31,14 @@ private:
     Organisation organisation_;
     std::map<std::string, WorkflowDefinition> definitions_;
     std::map<std::string, std::unique_ptr<WorkflowInstance> > instances_;
+    SnapshotStore snapshots_;
     CommandInvoker invoker_;
+    std::vector<std::string> commandInstances_;    // instance each recorded command acted on
     int nextInstance_;
+
+    // Runs the command through the invoker against the instance and remembers
+    // the instance so undo() can hand it back.
+    void record(const std::string& instanceId, WorkCommand* command);
 
     WorkflowInstance& findInstance(const std::string& instanceId) const;
     WorkItem& findItem(const std::string& instanceId, const std::string& itemId) const;
@@ -71,11 +79,11 @@ public:
     // everyone still working on it.
     void cancel(const std::string& instanceId, const std::string& reason = "");
 
-    // Undoes the most recent operation through the CommandInvoker.
-    // NOTE (integration point): the commands do not hold a receiver yet, so
-    // WorkCommand::undo() is still a no-op and this only removes the command
-    // from the history. Once the commands act on the instance, this undoes
-    // the work as well without any change here.
+    // Undoes the most recent operation through the CommandInvoker, which
+    // restores the instance from the snapshot taken before the command ran.
+    // Does nothing when there is nothing to undo.
+    // NOTE (integration point): the snapshots do not cover the work tree yet,
+    // so this only removes the command from the history for now.
     void undo();
 
     // Read-only view of a running instance.

@@ -58,7 +58,7 @@ void LeafWorkItem::transitionTo(std::unique_ptr<WorkItemState> next) {
     }
 }
 void LeafWorkItem::setAssignee(const std::string& participant) {
-    assignee = participant;
+    WorkItem::setAssignee(participant);
     reason_.clear();
 }
 
@@ -69,7 +69,7 @@ void LeafWorkItem::restore(const std::string& stateName, const std::string& assi
     state_ = stateFromName(stateName);
     status_ = state_->name();
     state = status_;
-    assignee = assigneeName;
+    WorkItem::setAssignee(assigneeName);
     reason_ = reasonText;
 }
 

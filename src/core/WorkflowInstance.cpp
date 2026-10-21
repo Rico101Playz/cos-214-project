@@ -29,7 +29,7 @@ std::shared_ptr<InstanceMemento> WorkflowInstance::createMemento(const std::stri
     auto m = std::make_shared<InstanceMemento>(label, status);
     for (const auto& kv : items) {
         const auto& item = kv.second;
-        m->addItem(WorkItemSnapshot(item->state, item->assignee, ""));
+        m->addItem(WorkItemSnapshot(item->state, item->assignee(), ""));
     }
     return m;
 }
@@ -43,7 +43,7 @@ void WorkflowInstance::restoreFromMemento(InstanceMemento* memento) {
     for (auto& kv : items) {
         if (i >= snaps.size()) break;
         kv.second->state    = snaps[i].getState();
-        kv.second->assignee = snaps[i].getAssignee();
+        kv.second->setAssignee(snaps[i].getAssignee());
         ++i;
     }
 }
