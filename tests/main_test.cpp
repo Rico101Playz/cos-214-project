@@ -24,6 +24,7 @@ int main() {
     run_iterator_tests();
     run_workflow_instance_tests();
     run_facade_tests();
+    run_observer_tests();  
     
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, " 
