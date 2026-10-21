@@ -2,7 +2,7 @@
 #include "patterns/execution/AwaitingApprovalState.h"
 #include "patterns/execution/RejectedState.h"
 #include "patterns/execution/EscalatedState.h"
-#include "core/LeafWorkItem.h"
+#include "patterns/structural/LeafWorkItem.h"
 
 #include <memory>
 

@@ -1,6 +1,6 @@
 #include "patterns/execution/AvailableState.h"
 #include "patterns/execution/AssignedState.h"
-#include "core/LeafWorkItem.h"
+#include "patterns/structural/LeafWorkItem.h"
 
 #include <memory>
 

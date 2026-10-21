@@ -1,7 +1,7 @@
 #include "patterns/execution/AssignedState.h"
 #include "patterns/execution/InProgressState.h"
 #include "patterns/execution/EscalatedState.h"
-#include "core/LeafWorkItem.h"
+#include "patterns/structural/LeafWorkItem.h"
 
 #include <memory>
 

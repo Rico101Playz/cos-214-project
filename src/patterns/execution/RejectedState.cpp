@@ -1,7 +1,7 @@
 #include "patterns/execution/RejectedState.h"
 #include "patterns/execution/AssignedState.h"
 #include "patterns/execution/InProgressState.h"
-#include "core/LeafWorkItem.h"
+#include "patterns/structural/LeafWorkItem.h"
 
 #include <memory>
 
