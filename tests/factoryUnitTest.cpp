@@ -6,6 +6,8 @@
 
 #include "patterns/creation/WorkflowFactory.h"
 #include "patterns/creation/SmallTeamFactory.h"
+#include "patterns/creation/HighRiskFactory.h"
+#include "core/Organisation.h"
 #include "patterns/creation/BusyTeamFactory.h"
 #include "patterns/execution/ApprovalRequest.h"
 
@@ -101,6 +103,57 @@ static void test_BusyTeamFactory() {
 }
 
 // ============================================================================
+// TEST: HighRiskFactory
+// ============================================================================
+static void test_HighRiskFactory() {
+    std::cout << "\n--- Testing HighRiskFactory ---\n";
+
+    HighRiskFactory concrete;
+    const WorkflowFactory& factory = concrete;   // used through the interface
+
+    check(factory.name() == "HighRisk", "HighRisk: knows its name");
+
+    std::unique_ptr<CompositeStage> stage = factory.createStage("s1", "Release");
+    check(stage->id() == "s1" && stage->name() == "Release",
+          "HighRisk: the stage has the id and name it was given");
+    check(stage->mode().name() == "Sequential", "HighRisk: stages run Sequential");
+
+    std::unique_ptr<LeafWorkItem> item = factory.createWorkItem("i1", "Deploy", "Reviewer");
+    check(item->id() == "i1" && item->name() == "Deploy",
+          "HighRisk: the item has the id and name it was given");
+    check(item->role() == "Reviewer", "HighRisk: the item has the role it was given");
+    check(item->dueHours() == 8, "HighRisk: work is due in 8 hours");
+    check(item->getData("risk") == "high", "HighRisk: every item is tagged risk=high");
+
+    std::unique_ptr<AssignmentStrategy> strategy = factory.createAssignmentStrategy();
+    check(strategy->name() == "RuleBased(LeastLoaded)",
+          "HighRisk: rule-based assignment that falls back to least loaded");
+
+    // The parts fit together: the item's tag triggers the strategy's rule.
+    Organisation org("Acme");
+    org.addParticipant("Rita", "Reviewer");
+    org.addParticipant("Tess", "TechLead");
+    Participant* picked = strategy->assign(*item, "Reviewer", org);
+    check(picked != nullptr && picked->name() == "Tess",
+          "HighRisk: review of a risk=high item goes to the Tech Lead, not the Reviewer");
+
+    // Nothing is approved automatically; every level can approve; timeouts escalate.
+    check(!chainResolves(factory, "Auto"), "HighRisk: nothing is approved automatically");
+    check(chainResolves(factory, "Reviewer"), "HighRisk: a Reviewer can approve");
+    check(chainResolves(factory, "TechLead"), "HighRisk: the Tech Lead can approve");
+    check(chainResolves(factory, "ReleaseManager"), "HighRisk: the Release Manager can approve");
+    check(chainResolves(factory, "Timeout"), "HighRisk: a timed-out request is escalated and approved");
+    check(!chainResolves(factory, "CEO"), "HighRisk: an unknown role is not approved");
+
+    // The policies really differ from each other.
+    BusyTeamFactory busy;
+    check(busy.createWorkItem("x", "x", "Reviewer")->hasData("risk") == false,
+          "HighRisk vs BusyTeam: only HighRisk tags its items");
+    check(!chainResolves(busy, "ReleaseManager"),
+          "HighRisk vs BusyTeam: only HighRisk can reach the Release Manager");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_factory_tests() {
@@ -110,6 +163,7 @@ void run_factory_tests() {
 
     test_SmallTeamFactory();
     test_BusyTeamFactory();
+    test_HighRiskFactory();
 
     std::cout << "Factory Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
