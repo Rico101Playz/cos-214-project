@@ -1,8 +1,10 @@
 #ifndef WORKITEM_H
 #define WORKITEM_H
 
+#include "patterns/structural/WorkNode.h"
 #include <map>
 #include <string>
+#include <utility>
 
 // A single unit of work, e.g. "Implement backend" or "Code review".
 //
@@ -13,29 +15,54 @@
 // (State). Whoever lands those patterns should extend this class and keep
 // id(), name(), role(), setData(), hasData() and getData() working, so the
 // strategies and approval handlers do not need to change.
-class WorkItem {
+class WorkItem : public WorkNode {
+public:
+    static const char* const CREATED;
+    static const char* const AVAILABLE;
+    static const char* const ASSIGNED;
+    static const char* const IN_PROGRESS;
+    static const char* const AWAITING_APPROVAL;
+    static const char* const COMPLETED;
+    static const char* const REJECTED;
+    static const char* const CANCELLED;
+
 private:
-    std::string id_;
-    std::string name_;
     std::string role_;
     std::map<std::string, std::string> data_;
 
-public:
+protected:
+    std::string status_;
+    std::string reason_;
+    void require(const std::string& action, const char* const allowed[], int count) const;
 
+public:
     std::string itemId;
     std::string state;
     std::string assignee;
-    
-    WorkItem(std::string id) : itemId(std::move(id)), state("Pending") {}
-    WorkItem(const std::string& id, const std::string& name, const std::string& role);
 
-    const std::string& id() const;
-    const std::string& name() const;
+    WorkItem(std::string id) : WorkNode(id, id), status_(CREATED), itemId(std::move(id)), state("Pending") {}
+    WorkItem(const std::string& id, const std::string& name, const std::string& role);
+    virtual ~WorkItem() = default;
+
     const std::string& role() const;
+    const std::string& status() const;
+    const std::string& reason() const;
 
     void setData(const std::string& key, const std::string& value);
     bool hasData(const std::string& key) const;
     std::string getData(const std::string& key, const std::string& fallback = "") const;
+
+    virtual void makeAvailable();
+    virtual void assign(const std::string& participant);
+    virtual void start();
+    virtual void complete();
+    virtual void approve();
+    virtual void reject(const std::string& reason);
+
+    bool isComplete() const override;
+    double progress() const override;
+    void cancel() override;
+    virtual bool isReady() const;
 };
 
 #endif // WORKITEM_H

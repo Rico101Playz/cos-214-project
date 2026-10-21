@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "patterns/structural/WorkNode.h"
+#include "patterns/execution/StageMode.h"
 
 // COMPOSITE pattern - the COMPOSITE.
 //
@@ -17,6 +18,8 @@ private:
 
 public:
     CompositeStage(const std::string& id, const std::string& name);
+    std::unique_ptr<StageMode> mode_;
+    StageMode& mode();
 
     // Takes ownership and returns the added node.
     // Throws std::invalid_argument for a null child.
@@ -34,6 +37,12 @@ public:
     double progress() const override;
     // Cancels every child.
     void cancel() override;
+
+    void setMode(std::unique_ptr<StageMode> mode);
+
+    void activate();
+    
+    void childCompleted(WorkNode& child);
 };
 
 #endif // COMPOSITESTAGE_H
