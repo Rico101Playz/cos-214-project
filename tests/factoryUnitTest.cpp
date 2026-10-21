@@ -6,6 +6,7 @@
 
 #include "patterns/creation/WorkflowFactory.h"
 #include "patterns/creation/SmallTeamFactory.h"
+#include "patterns/creation/WorkflowAssembler.h"
 #include "patterns/creation/HighRiskFactory.h"
 #include "core/Organisation.h"
 #include "patterns/creation/BusyTeamFactory.h"
@@ -154,6 +155,74 @@ static void test_HighRiskFactory() {
 }
 
 // ============================================================================
+// TEST: WorkflowAssembler (the client) with every factory
+// ============================================================================
+static int countItems(const WorkNode& node) {
+    if (node.childCount() == 0) return 1;
+    int total = 0;
+    for (std::size_t i = 0; i < node.childCount(); ++i) total += countItems(*node.child(i));
+    return total;
+}
+
+static void test_WorkflowAssembler() {
+    std::cout << "\n--- Testing WorkflowAssembler (one client, three policies) ---\n";
+
+    SmallTeamFactory small;
+    BusyTeamFactory busy;
+    HighRiskFactory risky;
+    const WorkflowFactory* factories[] = { &small, &busy, &risky };
+    const std::string modes[] = { "Sequential", "Parallel", "Sequential" };
+    const int dueHours[] = { 48, 24, 8 };
+
+    for (int f = 0; f < 3; ++f) {
+        const WorkflowFactory& factory = *factories[f];
+        const std::string who = factory.name() + ": ";
+
+        std::unique_ptr<CompositeStage> tree = WorkflowAssembler::buildFeatureTree(factory);
+        check(tree->name() == "Feature Delivery", who + "the tree is called Feature Delivery");
+        check(tree->childCount() == 3, who + "three stages: Develop, Review, Release");
+        check(tree->child(0)->name() == "Develop" && tree->child(1)->name() == "Review" &&
+              tree->child(2)->name() == "Release", who + "the stages are in order");
+        check(countItems(*tree) == 4, who + "four work items in total");
+
+        // Every part in the tree belongs to the same policy.
+        bool modesMatch = tree->mode().name() == modes[f];
+        bool itemsMatch = true;
+        for (std::size_t s = 0; s < tree->childCount(); ++s) {
+            CompositeStage* stage = dynamic_cast<CompositeStage*>(tree->child(s));
+            modesMatch = modesMatch && stage != nullptr && stage->mode().name() == modes[f];
+            for (std::size_t i = 0; stage != nullptr && i < stage->childCount(); ++i) {
+                LeafWorkItem* item = dynamic_cast<LeafWorkItem*>(stage->child(i));
+                itemsMatch = itemsMatch && item != nullptr && item->dueHours() == dueHours[f];
+            }
+        }
+        check(modesMatch, who + "every stage runs " + modes[f]);
+        check(itemsMatch, who + "every item is due in " + std::to_string(dueHours[f]) + " hours");
+
+        // The roles on the items are what the assignment strategy works with.
+        WorkNode* review = tree->child(1);
+        LeafWorkItem* codeReview = dynamic_cast<LeafWorkItem*>(review->child(0));
+        check(codeReview != nullptr && codeReview->role() == "Reviewer",
+              who + "the code review item needs a Reviewer");
+
+        Organisation org("Acme");
+        org.addParticipant("Rita", "Reviewer");
+        org.addParticipant("Tess", "TechLead");
+        std::unique_ptr<AssignmentService> service = WorkflowAssembler::buildAssignmentService(factory, org);
+        check(service->strategy().name() == factory.createAssignmentStrategy()->name(),
+              who + "the service uses the policy's assignment strategy");
+
+        Participant* picked = codeReview ? service->chooseAssignee(*codeReview, "Reviewer") : nullptr;
+        const std::string expected = (f == 2) ? "Tess" : "Rita";
+        check(picked != nullptr && picked->name() == expected,
+              who + "code review goes to " + expected);
+    }
+
+    check(WorkflowAssembler::buildFeatureTree(risky)->child(0)->childCount() == 2,
+          "The same client builds the same shape for any policy");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_factory_tests() {
@@ -164,6 +233,7 @@ void run_factory_tests() {
     test_SmallTeamFactory();
     test_BusyTeamFactory();
     test_HighRiskFactory();
+    test_WorkflowAssembler();
 
     std::cout << "Factory Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
