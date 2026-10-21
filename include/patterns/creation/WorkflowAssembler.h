@@ -3,7 +3,10 @@
 
 #include <memory>
 
+#include <string>
+
 #include "core/Organisation.h"
+#include "core/WorkflowDefinition.h"
 #include "patterns/creation/WorkflowFactory.h"
 #include "patterns/execution/AssignmentService.h"
 
@@ -24,6 +27,16 @@ public:
     //
     // Every stage and every item comes from `factory`.
     static std::unique_ptr<CompositeStage> buildFeatureTree(const WorkflowFactory& factory);
+
+    // Builds a work tree from a definition made by the Builder pattern:
+    // a root named after the definition, one stage per definition stage, and
+    // one work item per definition item. As in WorkflowInstance, the items go
+    // into the first stage (or straight under the root when there are no
+    // stages). The definition carries no roles, so every item gets
+    // `itemRole`. Every stage and item comes from `factory`.
+    static std::unique_ptr<CompositeStage> buildFromDefinition(
+        const WorkflowFactory& factory, const WorkflowDefinition& definition,
+        const std::string& itemRole);
 
     // An AssignmentService (over `organisation`) already set to the policy's
     // assignment strategy.

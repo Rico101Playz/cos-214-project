@@ -6,6 +6,8 @@
 
 #include "patterns/creation/WorkflowFactory.h"
 #include "patterns/creation/SmallTeamFactory.h"
+#include "patterns/creation/ConcreteDefinitionBuilder.h"
+#include "patterns/creation/FeatureDeliveryProcess.h"
 #include "patterns/creation/WorkflowAssembler.h"
 #include "patterns/creation/HighRiskFactory.h"
 #include "core/Organisation.h"
@@ -158,7 +160,8 @@ static void test_HighRiskFactory() {
 // TEST: WorkflowAssembler (the client) with every factory
 // ============================================================================
 static int countItems(const WorkNode& node) {
-    if (node.childCount() == 0) return 1;
+    // Only real work items count; an empty stage is not an item.
+    if (dynamic_cast<const LeafWorkItem*>(&node) != nullptr) return 1;
     int total = 0;
     for (std::size_t i = 0; i < node.childCount(); ++i) total += countItems(*node.child(i));
     return total;
@@ -223,6 +226,70 @@ static void test_WorkflowAssembler() {
 }
 
 // ============================================================================
+// TEST: Feature Delivery scenario (Builder + Abstract Factory + Strategy + Chain)
+// ============================================================================
+static void test_FeatureDeliveryScenario() {
+    std::cout << "\n--- Testing Feature Delivery scenario (Builder + Factory) ---\n";
+
+    // 1. The Builder (already on dev) produces the Feature Delivery definition.
+    ConcreteDefinitionBuilder builder;
+    FeatureDeliveryProcess process;
+    process.construct(&builder);
+    WorkflowDefinition definition = builder.build();
+    check(!definition.stages.empty() && !definition.items.empty(),
+          "Scenario: the Builder's definition has stages and items");
+
+    // 2. The same definition becomes a different workflow under each policy.
+    SmallTeamFactory small;
+    BusyTeamFactory busy;
+    HighRiskFactory risky;
+    std::unique_ptr<CompositeStage> smallTree = WorkflowAssembler::buildFromDefinition(small, definition, "Developer");
+    std::unique_ptr<CompositeStage> busyTree  = WorkflowAssembler::buildFromDefinition(busy, definition, "Developer");
+    std::unique_ptr<CompositeStage> riskyTree = WorkflowAssembler::buildFromDefinition(risky, definition, "Developer");
+
+    check(smallTree->name() == definition.name, "Scenario: the root is named after the definition");
+    check(smallTree->childCount() == definition.stages.size(),
+          "Scenario: one stage per stage in the definition");
+    check(countItems(*smallTree) == static_cast<int>(definition.items.size()),
+          "Scenario: one work item per item in the definition");
+    check(countItems(*smallTree) == countItems(*busyTree) && countItems(*busyTree) == countItems(*riskyTree),
+          "Scenario: the policies change how the work runs, not how much work there is");
+
+    check(smallTree->mode().name() == "Sequential" && busyTree->mode().name() == "Parallel",
+          "Scenario: small team runs Sequential, busy team runs Parallel");
+
+    LeafWorkItem* smallItem = dynamic_cast<LeafWorkItem*>(smallTree->child(0)->child(0));
+    LeafWorkItem* busyItem  = dynamic_cast<LeafWorkItem*>(busyTree->child(0)->child(0));
+    LeafWorkItem* riskyItem = dynamic_cast<LeafWorkItem*>(riskyTree->child(0)->child(0));
+    check(smallItem && busyItem && riskyItem, "Scenario: the first item in every tree is a work item");
+    check(smallItem->dueHours() == 48 && busyItem->dueHours() == 24 && riskyItem->dueHours() == 8,
+          "Scenario: deadlines tighten from small team to busy team to high risk");
+    check(!smallItem->hasData("risk") && !busyItem->hasData("risk") && riskyItem->getData("risk") == "high",
+          "Scenario: only the high-risk items carry the risk tag");
+
+    // 3. The policy's assignment strategy and approval chain act on those items.
+    Organisation org("Acme Software");
+    org.addParticipant("Alice", "Developer");
+    org.addParticipant("Bob", "Developer");
+    org.find("Alice")->addLoad(2);   // Alice is busier than Bob
+
+    std::unique_ptr<AssignmentService> smallService = WorkflowAssembler::buildAssignmentService(small, org);
+    std::unique_ptr<AssignmentService> busyService  = WorkflowAssembler::buildAssignmentService(busy, org);
+    Participant* bySmall = smallService->chooseAssignee(*smallItem, smallItem->role());
+    Participant* byBusy  = busyService->chooseAssignee(*busyItem, busyItem->role());
+    check(bySmall != nullptr && bySmall->name() == "Alice",
+          "Scenario: small team hands work to the first developer, whatever their load");
+    check(byBusy != nullptr && byBusy->name() == "Bob",
+          "Scenario: busy team hands the same work to the lighter-loaded developer");
+
+    check(chainResolves(small, "Auto") && !chainResolves(busy, "Auto") && !chainResolves(risky, "Auto"),
+          "Scenario: only the small team lets a request be approved automatically");
+    check(!chainResolves(small, "ReleaseManager") && !chainResolves(busy, "ReleaseManager") &&
+          chainResolves(risky, "ReleaseManager"),
+          "Scenario: only the high-risk policy reaches the Release Manager");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 void run_factory_tests() {
@@ -234,6 +301,7 @@ void run_factory_tests() {
     test_BusyTeamFactory();
     test_HighRiskFactory();
     test_WorkflowAssembler();
+    test_FeatureDeliveryScenario();
 
     std::cout << "Factory Tests: " << (testsPassed - passedBefore) << " passed, "
               << (testsFailed - failedBefore) << " failed.\n";
