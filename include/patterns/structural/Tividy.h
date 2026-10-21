@@ -9,6 +9,7 @@
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
 #include "patterns/execution/CommandInvoker.h"
+#include "patterns/execution/EventBus.h"
 
 // FACADE pattern - the FACADE.
 //
@@ -30,11 +31,15 @@ private:
     std::map<std::string, WorkflowDefinition> definitions_;
     std::map<std::string, std::unique_ptr<WorkflowInstance> > instances_;
     CommandInvoker invoker_;
+    EventBus bus_;
     int nextInstance_;
+    
 
     WorkflowInstance& findInstance(const std::string& instanceId) const;
     WorkItem& findItem(const std::string& instanceId, const std::string& itemId) const;
     Participant& findParticipant(const std::string& name) const;
+    void publish(const std::string& type, const std::string& instanceId,
+                 const std::string& itemId = "", const std::string& detail = "") const;
 
 public:
     explicit Tividy(const std::string& organisationName);
@@ -84,6 +89,10 @@ public:
     std::vector<std::string> readyItems(const std::string& instanceId) const;
     // The share of the instance's work items that are complete, 0.0 .. 1.0.
     double progress(const std::string& instanceId) const;
+
+    // OBSERVER pattern: attach observers here to hear about everything the
+    // engine does.
+    EventBus& bus();
 };
 
 #endif // TIVIDY_H
