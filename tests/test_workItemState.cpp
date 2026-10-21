@@ -100,7 +100,7 @@ static void test_InitialState() {
     check(item.id() == "t1" && item.name() == "Write code", "LeafWorkItem: keeps id and name");
     check(item.role() == "Developer", "LeafWorkItem: keeps role");
     check(item.dueHours() == 8, "LeafWorkItem: keeps dueHours");
-    check(item.assignee.empty() && item.reason().empty(), "LeafWorkItem: no assignee or reason yet");
+    check(item.assignee().empty() && item.reason().empty(), "LeafWorkItem: no assignee or reason yet");
     check(!item.isComplete() && nearly(item.progress(), 0.0), "LeafWorkItem: not complete, progress 0");
     check(!item.isReady(), "LeafWorkItem: a Created item is not ready");
 }
@@ -114,7 +114,7 @@ static void test_HappyPath() {
     check(item.isReady(), "Happy path: an Available item is ready");
 
     item.assign("alice");
-    check(item.status() == "Assigned" && item.assignee == "alice", "Happy path: Available -> Assigned (assignee recorded)");
+    check(item.status() == "Assigned" && item.assignee() == "alice", "Happy path: Available -> Assigned (assignee recorded)");
     check(!item.isReady(), "Happy path: an Assigned item is no longer ready");
 
     item.start();
@@ -171,7 +171,7 @@ static void test_RejectAndRework() {
           "Reject: AwaitingApproval -> Rejected, reason replaced");
 
     item.assign("carol");
-    check(item.status() == "Assigned" && item.assignee == "carol", "Reassign: Rejected -> Assigned to someone else");
+    check(item.status() == "Assigned" && item.assignee() == "carol", "Reassign: Rejected -> Assigned to someone else");
     check(item.reason().empty(), "Reassign: a fresh assignment clears the rejection reason");
 }
 
@@ -181,7 +181,7 @@ static void test_ReassignAndEscalate() {
     driveTo(item, "Assigned");
 
     item.assign("bob");
-    check(item.status() == "Assigned" && item.assignee == "bob", "Reassign: Assigned stays Assigned, assignee changes");
+    check(item.status() == "Assigned" && item.assignee() == "bob", "Reassign: Assigned stays Assigned, assignee changes");
 
     item.escalate();
     check(item.status() == "Escalated", "Escalate: Assigned -> Escalated");
@@ -189,7 +189,7 @@ static void test_ReassignAndEscalate() {
     check(throwsLogicError([&]{ item.complete(); }), "Escalated: cannot be completed before reassignment");
 
     item.assign("dave");
-    check(item.status() == "Assigned" && item.assignee == "dave", "Escalated: assign -> Assigned again");
+    check(item.status() == "Assigned" && item.assignee() == "dave", "Escalated: assign -> Assigned again");
 
     item.start();
     item.escalate();
@@ -229,7 +229,7 @@ static void test_Restore() {
     LeafWorkItem item("s1", "Snapshot me", "Developer");
 
     item.restore("InProgress", "erin", "");
-    check(item.status() == "InProgress" && item.assignee == "erin", "Restore: sets state and assignee");
+    check(item.status() == "InProgress" && item.assignee() == "erin", "Restore: sets state and assignee");
     check(item.state == "InProgress", "Restore: legacy 'state' mirror follows");
     item.complete();
     check(item.status() == "AwaitingApproval", "Restore: the restored state object behaves correctly");

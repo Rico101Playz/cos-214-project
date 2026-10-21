@@ -69,7 +69,7 @@ static void test_FullDeliveryScenario() {
     test->escalate();
     check(test->status() == "Escalated" && ready(inst).empty(), "Scenario: an escalated item is not ready for anyone");
     test->assign("dave");
-    check(test->status() == "Assigned" && test->assignee == "dave", "Scenario: escalation ends with reassignment");
+    check(test->status() == "Assigned" && test->assignee() == "dave", "Scenario: escalation ends with reassignment");
     test->start();
     test->complete();
     test->approve();
