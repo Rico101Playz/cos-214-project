@@ -2,13 +2,12 @@
 #include "patterns/execution/AssignedState.h"
 #include "patterns/execution/InProgressState.h"
 #include "core/LeafWorkItem.h"
-#include "core/Participant.h"
 
 #include <memory>
 
 std::string RejectedState::name() const { return "Rejected"; }
 
-void RejectedState::assign(LeafWorkItem& item, Participant& participant) {
+void RejectedState::assign(LeafWorkItem& item, const std::string& participant) {
     item.setAssignee(participant);
     item.transitionTo(std::unique_ptr<WorkItemState>(new AssignedState()));
 }

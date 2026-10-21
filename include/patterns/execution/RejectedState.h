@@ -6,7 +6,7 @@
 class RejectedState : public WorkItemState {
 public:
     std::string name() const override;
-    void assign(LeafWorkItem& item, Participant& participant) override;
+    void assign(LeafWorkItem& item, const std::string& participant) override;
     void start(LeafWorkItem& item) override;
 };
 
