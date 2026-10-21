@@ -3,10 +3,16 @@
 #include "patterns/execution/DepthFirstIterator.h"
 #include <iostream>
 
-WorkflowInstance::WorkflowInstance(std::string id, InstanceStatus initialStatus)
-    : id(std::move(id)), status(initialStatus) {}
+#include <utility>
+#include "patterns/execution/InstanceState.h"
+#include "patterns/execution/CreatedInstance.h"
+#include "patterns/structural/LeafWorkItem.h"   
 
-std::string WorkflowInstance::getId() const { return id; }
+
+WorkflowInstance::WorkflowInstance(std::string id, InstanceStatus initialStatus)
+    : legacyId(std::move(id)), status(initialStatus) {}
+
+std::string WorkflowInstance::getId() const { return legacyId; }
 InstanceStatus WorkflowInstance::getStatus() const { return status; }
 
 void WorkflowInstance::addItem(std::shared_ptr<WorkItem> item) {
@@ -81,7 +87,8 @@ WorkflowInstance::WorkflowInstance(const std::string& id, const WorkflowDefiniti
     }
     for (std::size_t i = 0; i < definition_.items.size(); ++i) {
         const std::string& item = definition_.items[i];
-        target->add(std::unique_ptr<WorkNode>(new WorkItem(item, item, "")));
+        // STATE: LeafWorkItem instead of WorkItem, so every item has a lifecycle state
+        target->add(std::unique_ptr<WorkNode>(new LeafWorkItem(item, item, "")));
     }
 }
 
@@ -117,44 +124,50 @@ void WorkflowInstance::release(WorkNode* stage) {
     }
 }
 
-void WorkflowInstance::start() {
-    if (state_ != CREATED) {
-        throw std::logic_error("Cannot start instance " + id_ + " while it is " + state_);
+// STATE: releases a node through its stage's mode (Sequential/Parallel).
+// Falls back to release() for anything that is not a stage.
+void WorkflowInstance::activateStage(WorkNode* node) {
+    if (node == nullptr) return;
+    CompositeStage* stage = dynamic_cast<CompositeStage*>(node);
+    if (stage != nullptr) {
+        stage->activate();
+    } else {
+        release(node);
     }
-    state_ = RUNNING;
-    currentStage_ = 0;
-    release(currentStage());
-    advance();
 }
 
-void WorkflowInstance::advance() {
-    if (state_ != RUNNING) {
-        return;
-    }
+void WorkflowInstance::setState(std::unique_ptr<InstanceState> next) {
+    instanceState_ = std::move(next);
+    state_ = instanceState_->name();
+}
+
+void WorkflowInstance::setReason(const std::string& reason) { reason_ = reason; }
+
+void WorkflowInstance::openFirstStage() {
+    currentStage_ = 0;
+    activateStage(currentStage());           
+}
+
+bool WorkflowInstance::stagesFinished() {
     if (definition_.stages.empty()) {
-        if (root_->isComplete()) {
-            state_ = COMPLETED;
-        }
-        return;
+        return root_->isComplete();
     }
     while (root_->child(currentStage_)->isComplete()) {
         if (currentStage_ + 1 == root_->childCount()) {
-            state_ = COMPLETED;
-            return;
+            return true;
         }
         ++currentStage_;
-        release(root_->child(currentStage_));
+        activateStage(root_->child(currentStage_));
     }
+    return false;
 }
 
-void WorkflowInstance::cancel(const std::string& reason) {
-    if (state_ == COMPLETED || state_ == CANCELLED) {
-        throw std::logic_error("Cannot cancel instance " + id_ + " while it is " + state_);
-    }
-    root_->cancel();
-    reason_ = reason;
-    state_ = CANCELLED;
-}
+
+void WorkflowInstance::start()   { instanceState_->start(*this); }
+void WorkflowInstance::advance() { instanceState_->advance(*this); }
+void WorkflowInstance::cancel(const std::string& reason) { instanceState_->cancel(*this, reason); }
+
+
 
 WorkNode* WorkflowInstance::find(const std::string& nodeId) const {
     return root_->find(nodeId);

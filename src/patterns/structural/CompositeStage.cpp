@@ -1,4 +1,5 @@
 #include "patterns/structural/CompositeStage.h"
+#include "patterns/execution/ParallelMode.h"
 #include <stdexcept>
 
 CompositeStage::CompositeStage(const std::string& id, const std::string& name)
@@ -55,5 +56,22 @@ double CompositeStage::progress() const {
 void CompositeStage::cancel() {
     for (std::size_t i = 0; i < children_.size(); ++i) {
         children_[i]->cancel();
+    }
+}
+
+StageMode& CompositeStage::mode() {
+    if (!mode_) mode_.reset(new ParallelMode());   
+    return *mode_;
+}
+
+void CompositeStage::setMode(std::unique_ptr<StageMode> mode) { mode_ = std::move(mode); }
+
+void CompositeStage::activate() { mode().activate(*this); }
+
+void CompositeStage::childCompleted(WorkNode& child) {
+    mode().childCompleted(*this, child);
+    if (isComplete()) {                          
+        CompositeStage* up = dynamic_cast<CompositeStage*>(parent());
+        if (up != nullptr) up->childCompleted(*this);
     }
 }

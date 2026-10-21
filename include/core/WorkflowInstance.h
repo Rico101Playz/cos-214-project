@@ -9,6 +9,8 @@
 #include "core/WorkflowDefinition.h"
 #include "core/WorkItem.h"
 #include "patterns/structural/CompositeStage.h"
+#include "patterns/execution/InstanceState.h"
+#include "patterns/execution/CreatedInstance.h"
 
 class WorkflowInstance {
 
@@ -19,7 +21,7 @@ public:
     static const char* const CANCELLED;
 
 private:
-    std::string id;
+    std::string legacyId;
     InstanceStatus status;
     std::map<std::string, std::shared_ptr<WorkItem>> items;
 
@@ -27,8 +29,11 @@ private:
     WorkflowDefinition definition_;
     std::unique_ptr<CompositeStage> root_;
     std::string state_;
-    std::string reason_;            // why it was cancelled
+    std::string reason_; 
     std::size_t currentStage_;  
+
+    std::unique_ptr<InstanceState> instanceState_{new CreatedInstance()};
+    void activateStage(WorkNode* node);
 
     void release(WorkNode* stage);
 public:
@@ -88,6 +93,11 @@ public:
     WorkNode* find(const std::string& nodeId) const;
     // A work item by id; nullptr when the id is unknown or names a stage.
     WorkItem* item(const std::string& itemId) const;
+
+    void setState(std::unique_ptr<InstanceState> next);
+    void setReason(const std::string& reason);
+    void openFirstStage();
+    bool stagesFinished();
 };
 
-#endif // WORKFLOWINSTANCE_H
+#endif
