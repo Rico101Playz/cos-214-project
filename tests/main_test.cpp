@@ -15,6 +15,7 @@ void run_stage_mode_tests();
 void run_composite_unit_tests();
 void run_state_composite_integration_tests();
 
+void runChainOfResponsibilityTests();
 int main() {
     std::cout << "========================================\n";
     std::cout << "       Running TIVIDY Test Suite\n";
@@ -34,6 +35,8 @@ int main() {
     run_composite_unit_tests();
     run_state_composite_integration_tests();
 
+    runChainOfResponsibilityTests();
+    
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, "
               << testsFailed << " failed.\n";
