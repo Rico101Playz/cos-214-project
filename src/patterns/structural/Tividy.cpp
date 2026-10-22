@@ -17,6 +17,8 @@ Tividy::Tividy(const std::string& organisationName)
 
 Organisation& Tividy::organisation() { return organisation_; }
 
+EventBus& Tividy::bus() { return bus_; }
+
 WorkflowInstance& Tividy::findInstance(const std::string& instanceId) const {
     std::map<std::string, std::unique_ptr<WorkflowInstance> >::const_iterator it =
         instances_.find(instanceId);
@@ -47,6 +49,11 @@ void Tividy::record(const std::string& instanceId, WorkCommand* command) {
     commandInstances_.push_back(instanceId);
 }
 
+void Tividy::publish(const std::string& type, const std::string& instanceId,
+                     const std::string& itemId, const std::string& detail) const {
+    bus_.notify(WorkflowEvent(type, instanceId, itemId, detail));
+}
+
 void Tividy::loadDefinition(const std::string& name) {
     ConcreteDefinitionBuilder builder;
     FeatureDeliveryProcess process;
@@ -57,6 +64,7 @@ void Tividy::loadDefinition(const std::string& name) {
 void Tividy::loadDefinition(const std::string& name, const WorkflowDefinition& definition) {
     definitions_[name] = definition;
 }
+
 
 bool Tividy::hasDefinition(const std::string& name) const {
     return definitions_.find(name) != definitions_.end();
@@ -73,7 +81,13 @@ std::string Tividy::startInstance(const std::string& definition) {
 
     std::unique_ptr<WorkflowInstance> instance(new WorkflowInstance(id.str(), it->second));
     instance->start();
+    bool finished = instance->state() == WorkflowInstance::COMPLETED;
     instances_[id.str()] = std::move(instance);
+
+    publish(WorkflowEvent::INSTANCE_STARTED, id.str(), "", it->second.name);
+    if (finished) {
+        publish(WorkflowEvent::INSTANCE_COMPLETED, id.str());
+    }
     return id.str();
 }
 
@@ -95,16 +109,21 @@ void Tividy::assign(const std::string& instanceId, const std::string& itemId,
     }
     assignee.addLoad(1);
     record(instanceId, new AssignCommand(&snapshots_, instanceId, itemId, participant));
+    publish(WorkflowEvent::ITEM_ASSIGNED, instanceId, itemId, participant);
 }
 
 void Tividy::start(const std::string& instanceId, const std::string& itemId) {
-    findItem(instanceId, itemId).start();
+    WorkItem& item = findItem(instanceId, itemId);
+    item.start();
     record(instanceId, new StartCommand(&snapshots_, instanceId, itemId));
+    publish(WorkflowEvent::ITEM_STARTED, instanceId, itemId, item.assignee());
 }
 
 void Tividy::complete(const std::string& instanceId, const std::string& itemId) {
-    findItem(instanceId, itemId).complete();
+    WorkItem& item = findItem(instanceId, itemId);
+    item.complete();
     record(instanceId, new CompleteCommand(&snapshots_, instanceId, itemId));
+    publish(WorkflowEvent::ITEM_COMPLETED, instanceId, itemId, item.assignee());
 }
 
 void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
@@ -118,6 +137,10 @@ void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
     }
     instance.advance();
     record(instanceId, new ApproveCommand(&snapshots_, instanceId, itemId, true, ""));
+    publish(WorkflowEvent::ITEM_APPROVED, instanceId, itemId, item.assignee());
+    if (instance.state() == WorkflowInstance::COMPLETED) {
+        publish(WorkflowEvent::INSTANCE_COMPLETED, instanceId);
+    }
 }
 
 void Tividy::reject(const std::string& instanceId, const std::string& itemId,
@@ -130,6 +153,7 @@ void Tividy::reject(const std::string& instanceId, const std::string& itemId,
         assignee->addLoad(-1);
     }
     record(instanceId, new RejectCommand(&snapshots_, instanceId, itemId, reason));
+    publish(WorkflowEvent::ITEM_REJECTED, instanceId, itemId, reason);
 }
 
 void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
@@ -157,6 +181,7 @@ void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
         busy[i]->addLoad(-1);
     }
     record(instanceId, new CancelCommand(&snapshots_, instanceId, instanceId, reason));
+    publish(WorkflowEvent::INSTANCE_CANCELLED, instanceId, "", reason);
 }
 
 void Tividy::undo() {
