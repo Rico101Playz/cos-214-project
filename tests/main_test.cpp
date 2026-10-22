@@ -38,6 +38,7 @@ int main() {
 
     runChainOfResponsibilityTests();
     run_factory_tests();
+    run_observer_tests();  
     
     std::cout << "\n========================================\n";
     std::cout << "TOTAL Results: " << testsPassed << " passed, "

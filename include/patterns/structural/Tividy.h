@@ -10,6 +10,7 @@
 #include "core/WorkflowInstance.h"
 #include "patterns/execution/CommandInvoker.h"
 #include "patterns/execution/Memento.h"
+#include "patterns/execution/EventBus.h"
 
 // FACADE pattern - the FACADE.
 //
@@ -34,7 +35,9 @@ private:
     SnapshotStore snapshots_;
     CommandInvoker invoker_;
     std::vector<std::string> commandInstances_;    // instance each recorded command acted on
+    EventBus bus_;
     int nextInstance_;
+    
 
     // Runs the command through the invoker against the instance and remembers
     // the instance so undo() can hand it back.
@@ -43,6 +46,8 @@ private:
     WorkflowInstance& findInstance(const std::string& instanceId) const;
     WorkItem& findItem(const std::string& instanceId, const std::string& itemId) const;
     Participant& findParticipant(const std::string& name) const;
+    void publish(const std::string& type, const std::string& instanceId,
+                 const std::string& itemId = "", const std::string& detail = "") const;
 
 public:
     explicit Tividy(const std::string& organisationName);
@@ -92,6 +97,10 @@ public:
     std::vector<std::string> readyItems(const std::string& instanceId) const;
     // The share of the instance's work items that are complete, 0.0 .. 1.0.
     double progress(const std::string& instanceId) const;
+
+    // OBSERVER pattern: attach observers here to hear about everything the
+    // engine does.
+    EventBus& bus();
 };
 
 #endif // TIVIDY_H
