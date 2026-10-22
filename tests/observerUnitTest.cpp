@@ -200,8 +200,8 @@ void test_FacadeEvents() {
           "Tividy: a rejection reaches the Notifier with its reason");
 
     int before = metrics.total();
-    check(throwsLogicError([&] { engine.start(id, "Test"); }),
-          "Tividy: starting rejected work is refused");
+    check(throwsLogicError([&] { engine.approve(id, "Test"); }),
+          "Tividy: approving rejected work is refused");
     check(metrics.total() == before, "Tividy: a call that throws publishes nothing");
 
     engine.cancel(id, "Scope cut");

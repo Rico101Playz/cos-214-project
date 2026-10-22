@@ -14,6 +14,7 @@ void run_instance_state_tests();
 void run_stage_mode_tests();
 void run_composite_unit_tests();
 void run_state_composite_integration_tests();
+void run_observer_tests();
 
 void runChainOfResponsibilityTests();
 void run_factory_tests();
