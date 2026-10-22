@@ -47,6 +47,7 @@ Participant& Tividy::findParticipant(const std::string& name) const {
 void Tividy::record(const std::string& instanceId, WorkCommand* command) {
     invoker_.invoke(std::unique_ptr<WorkCommand>(command), &findInstance(instanceId));
     commandInstances_.push_back(instanceId);
+}
 
 void Tividy::publish(const std::string& type, const std::string& instanceId,
                      const std::string& itemId, const std::string& detail) const {
