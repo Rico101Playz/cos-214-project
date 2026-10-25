@@ -93,50 +93,58 @@ std::string Tividy::startInstance(const std::string& definition) {
 
 void Tividy::assign(const std::string& instanceId, const std::string& itemId,
                     const std::string& participant) {
+    // 1. Validate up front (so we throw invalid_argument, not logic_error).
     WorkItem& item = findItem(instanceId, itemId);
     Participant& assignee = findParticipant(participant);
 
-    // Only an Assigned item still counts towards its previous assignee's load;
-    // a rejected item released it when it was rejected.
     Participant* previous = nullptr;
     if (item.status() == WorkItem::ASSIGNED) {
         previous = organisation_.find(item.assignee());
     }
 
-    item.assign(participant);
+    // 2. Let the command perform the mutation (single source of truth).
+    record(instanceId, new AssignCommand(&snapshots_, instanceId, itemId, participant));
+
+    // 3. Side effects AFTER the successful mutation.
     if (previous != nullptr) {
         previous->addLoad(-1);
     }
     assignee.addLoad(1);
-    record(instanceId, new AssignCommand(&snapshots_, instanceId, itemId, participant));
     publish(WorkflowEvent::ITEM_ASSIGNED, instanceId, itemId, participant);
 }
 
 void Tividy::start(const std::string& instanceId, const std::string& itemId) {
-    WorkItem& item = findItem(instanceId, itemId);
-    item.start();
+    // The command drives the transition; if it throws (illegal state),
+    // the event never gets published, and undo history stays consistent.
     record(instanceId, new StartCommand(&snapshots_, instanceId, itemId));
+
+    WorkItem& item = findItem(instanceId, itemId);
     publish(WorkflowEvent::ITEM_STARTED, instanceId, itemId, item.assignee());
 }
 
 void Tividy::complete(const std::string& instanceId, const std::string& itemId) {
-    WorkItem& item = findItem(instanceId, itemId);
-    item.complete();
     record(instanceId, new CompleteCommand(&snapshots_, instanceId, itemId));
+    WorkItem& item = findItem(instanceId, itemId);
     publish(WorkflowEvent::ITEM_COMPLETED, instanceId, itemId, item.assignee());
 }
 
 void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
     WorkflowInstance& instance = findInstance(instanceId);
-    WorkItem& item = findItem(instanceId, itemId);
 
-    item.approve();
+    record(instanceId, new ApproveCommand(&snapshots_, instanceId, itemId, true, ""));
+
+    // Now the item really is approved; adjust loads and possibly complete the instance.
+    WorkItem& item = findItem(instanceId, itemId);
     Participant* assignee = organisation_.find(item.assignee());
     if (assignee != nullptr) {
         assignee->addLoad(-1);
     }
+
+    // Note: instance.advance() used to be here. That has side effects (releases
+    // next stage). If approve() is the last item in the current stage, you want
+    // advance() — but it mutates the instance, so it should be inside the command
+    // OR treated as a separate command. For now, keep it here (post-command, pre-event).
     instance.advance();
-    record(instanceId, new ApproveCommand(&snapshots_, instanceId, itemId, true, ""));
     publish(WorkflowEvent::ITEM_APPROVED, instanceId, itemId, item.assignee());
     if (instance.state() == WorkflowInstance::COMPLETED) {
         publish(WorkflowEvent::INSTANCE_COMPLETED, instanceId);
@@ -145,22 +153,21 @@ void Tividy::approve(const std::string& instanceId, const std::string& itemId) {
 
 void Tividy::reject(const std::string& instanceId, const std::string& itemId,
                     const std::string& reason) {
-    WorkItem& item = findItem(instanceId, itemId);
+    record(instanceId, new RejectCommand(&snapshots_, instanceId, itemId, reason));
 
-    item.reject(reason);
+    WorkItem& item = findItem(instanceId, itemId);
     Participant* assignee = organisation_.find(item.assignee());
     if (assignee != nullptr) {
         assignee->addLoad(-1);
     }
-    record(instanceId, new RejectCommand(&snapshots_, instanceId, itemId, reason));
     publish(WorkflowEvent::ITEM_REJECTED, instanceId, itemId, reason);
 }
 
 void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
     WorkflowInstance& instance = findInstance(instanceId);
 
-    // Note who is still busy before cancelling, since cancelling wipes the
-    // statuses that say so.
+    // 1. Snapshot who is busy — must happen BEFORE the command cancels,
+    //    because cancellation wipes item statuses.
     std::vector<Participant*> busy;
     DepthFirstIterator it(&instance.root());
     for (it.first(); !it.isDone(); it.next()) {
@@ -176,11 +183,13 @@ void Tividy::cancel(const std::string& instanceId, const std::string& reason) {
         }
     }
 
-    instance.cancel(reason);
+    // 2. The command performs the actual cancel (single source of mutation).
+    record(instanceId, new CancelCommand(&snapshots_, instanceId, instanceId, reason));
+
+    // 3. Release loads AFTER the successful cancellation.
     for (std::size_t i = 0; i < busy.size(); ++i) {
         busy[i]->addLoad(-1);
     }
-    record(instanceId, new CancelCommand(&snapshots_, instanceId, instanceId, reason));
     publish(WorkflowEvent::INSTANCE_CANCELLED, instanceId, "", reason);
 }
 
