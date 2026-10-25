@@ -1,5 +1,6 @@
 #include "patterns/execution/ApproveCommand.h"
 #include "core/WorkflowInstance.h"
+#include "patterns/structural/LeafWorkItem.h"
 
 ApproveCommand::ApproveCommand(SnapshotStore* store, std::string instanceId, 
                                const std::string& itemId, bool approved, const std::string& comment)
@@ -9,8 +10,23 @@ ApproveCommand::ApproveCommand(SnapshotStore* store, std::string instanceId,
       comment(comment) {}
 
 void ApproveCommand::perform(WorkflowInstance* instance) {
-    if (instance) {
-        instance->approveItem(itemId, approved, comment);
+    if (instance == nullptr)
+        throw std::invalid_argument("ApproveCommand: instance is null");
+
+    WorkItem* item = instance->item(itemId);
+    if (item == nullptr)
+        throw std::invalid_argument(
+            "CompleteCommand: unknown item '" + itemId + "'");
+
+    if (dynamic_cast<LeafWorkItem*>(item) == nullptr)
+        throw std::invalid_argument(
+            "CompleteCommand: '" + itemId + "' is not a leaf work item");
+
+    if (!instance->approveItem(itemId, approved, comment)) {
+        throw std::logic_error(
+            "ApproveCommand: item '" + itemId +
+            "' is not in a state that accepts " +
+            (approved ? "approval" : "rejection"));
     }
 }
 

@@ -10,6 +10,7 @@
 #include "patterns/execution/RejectedState.h"
 #include "patterns/execution/CancelledState.h"
 #include "patterns/execution/EscalatedState.h"
+#include "patterns/creation/StateFactory.h"
 
 #include <stdexcept>
 #include <utility>
@@ -66,24 +67,11 @@ void LeafWorkItem::setReason(const std::string& reason) { reason_ = reason; }
 
 void LeafWorkItem::restore(const std::string& stateName, const std::string& assigneeName,
                            const std::string& reasonText) {
-    state_ = stateFromName(stateName);
+    state_ = createWorkItemState(stateName);
     status_ = state_->name();
     state = status_;
     WorkItem::setAssignee(assigneeName);
     reason_ = reasonText;
-}
-
-std::unique_ptr<WorkItemState> LeafWorkItem::stateFromName(const std::string& name) {
-    if (name == "Created")          return std::unique_ptr<WorkItemState>(new CreatedState());
-    if (name == "Available")        return std::unique_ptr<WorkItemState>(new AvailableState());
-    if (name == "Assigned")         return std::unique_ptr<WorkItemState>(new AssignedState());
-    if (name == "InProgress")       return std::unique_ptr<WorkItemState>(new InProgressState());
-    if (name == "AwaitingApproval") return std::unique_ptr<WorkItemState>(new AwaitingApprovalState());
-    if (name == "Completed")        return std::unique_ptr<WorkItemState>(new CompletedState());
-    if (name == "Rejected")         return std::unique_ptr<WorkItemState>(new RejectedState());
-    if (name == "Cancelled")        return std::unique_ptr<WorkItemState>(new CancelledState());
-    if (name == "Escalated")        return std::unique_ptr<WorkItemState>(new EscalatedState());
-    throw std::invalid_argument("Unknown work item state: " + name);
 }
 
 int LeafWorkItem::dueHours() const { return dueHours_; }

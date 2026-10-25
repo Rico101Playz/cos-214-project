@@ -12,8 +12,6 @@ private:
     int dueHours_;
     std::unique_ptr<WorkItemState> state_;
 
-    static std::unique_ptr<WorkItemState> stateFromName(const std::string& name);
-
 public:
     LeafWorkItem(const std::string& id, const std::string& name,
                  const std::string& role, int dueHours = 0);
