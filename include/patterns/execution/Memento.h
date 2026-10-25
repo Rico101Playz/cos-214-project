@@ -7,28 +7,18 @@
 #include <memory>
 
 // ---------------------------------------------------------
-// InstanceStatus 
-// ---------------------------------------------------------
-enum class InstanceStatus {
-    Pending,
-    Active,
-    Completed,
-    Cancelled
-};
-
-// ---------------------------------------------------------
 // WorkItemSnapshot
 // ---------------------------------------------------------
 class WorkItemSnapshot {
 private:
-    std::string state;
+    std::string stateName;
     std::string assignee;
     std::string reason;
 
 public:
-    WorkItemSnapshot(std::string state, std::string assignee, std::string reason);
+    WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason);
 
-    const std::string& getState() const;
+    const std::string& getStateName() const;
     const std::string& getAssignee() const;
     const std::string& getReason() const;
 };
@@ -56,15 +46,15 @@ public:
 class InstanceMemento {
 private:
     std::string label;
-    InstanceStatus status;
+    std::string statusName;
     std::vector<WorkItemSnapshot> items;
     std::vector<ApprovalSnapshot> approvals;
 
 public:
-    InstanceMemento(std::string lbl, InstanceStatus stat);
+    InstanceMemento(std::string lbl, std::string statusName);
 
     const std::string& getLabel() const;
-    InstanceStatus getStatus() const;
+    const std::string& getStatusName() const;
     
     const std::vector<WorkItemSnapshot>& getItems() const;
     const std::vector<ApprovalSnapshot>& getApprovals() const;
