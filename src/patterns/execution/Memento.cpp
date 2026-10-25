@@ -4,11 +4,11 @@
 // ---------------------------------------------------------
 // WorkItemSnapshot
 // ---------------------------------------------------------
-WorkItemSnapshot::WorkItemSnapshot(std::string state, std::string assignee, std::string reason)
-    : state(std::move(state)), assignee(std::move(assignee)), reason(std::move(reason)) {}
+WorkItemSnapshot::WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason)
+    : stateName(std::move(stateName)), assignee(std::move(assignee)), reason(std::move(reason)) {}
 
-const std::string& WorkItemSnapshot::getState() const { 
-    return state; 
+const std::string& WorkItemSnapshot::getStateName() const { 
+    return stateName; 
 }
 
 const std::string& WorkItemSnapshot::getAssignee() const { 
@@ -40,20 +40,21 @@ bool ApprovalSnapshot::getApproved() const {
 // ---------------------------------------------------------
 // InstanceMemento
 // ---------------------------------------------------------
-InstanceMemento::InstanceMemento(std::string lbl, InstanceStatus stat)
-    : label(std::move(lbl)), status(stat) {}
+InstanceMemento::InstanceMemento(std::string lbl, std::string statName)
+    : label(std::move(lbl)), statusName(std::move(statName)) {}
 
 const std::string& InstanceMemento::getLabel() const {
     return label; 
 }
 
-InstanceStatus InstanceMemento::getStatus() const { 
-    return status; 
+const std::string& InstanceMemento::getStatusName() const { 
+    return statusName; 
 }
 
 const std::vector<WorkItemSnapshot>& InstanceMemento::getItems() const { 
     return items; 
 }
+
 const std::vector<ApprovalSnapshot>& InstanceMemento::getApprovals() const { 
     return approvals; 
 }
