@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run the tests
+        run: ./build/TIVIDY_Tests
+
+      - name: Keep the app binary
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tividy-linux
+          path: build/TIVIDY_App
