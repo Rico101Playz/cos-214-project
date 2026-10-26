@@ -4,8 +4,14 @@
 // ---------------------------------------------------------
 // WorkItemSnapshot
 // ---------------------------------------------------------
-WorkItemSnapshot::WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason)
-    : stateName(std::move(stateName)), assignee(std::move(assignee)), reason(std::move(reason)) {}
+WorkItemSnapshot::WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason,
+                                   std::string itemId)
+    : stateName(std::move(stateName)), assignee(std::move(assignee)), reason(std::move(reason)),
+      itemId(std::move(itemId)) {}
+
+const std::string& WorkItemSnapshot::getItemId() const {
+    return itemId;
+}
 
 const std::string& WorkItemSnapshot::getStateName() const { 
     return stateName; 
@@ -41,7 +47,15 @@ bool ApprovalSnapshot::getApproved() const {
 // InstanceMemento
 // ---------------------------------------------------------
 InstanceMemento::InstanceMemento(std::string lbl, std::string statName)
-    : label(std::move(lbl)), statusName(std::move(statName)) {}
+    : label(std::move(lbl)), statusName(std::move(statName)), stageIndex(0) {}
+
+std::size_t InstanceMemento::getStageIndex() const {
+    return stageIndex;
+}
+
+void InstanceMemento::setStageIndex(std::size_t index) {
+    stageIndex = index;
+}
 
 const std::string& InstanceMemento::getLabel() const {
     return label; 

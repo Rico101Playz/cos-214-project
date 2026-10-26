@@ -17,6 +17,7 @@
 #include "patterns/execution/RunningInstance.h"
 #include "patterns/execution/CompletedInstance.h"
 #include "patterns/execution/CancelledInstance.h"
+#include "patterns/execution/AwaitingSignOffInstance.h"
 
 
 #include <stdexcept>
@@ -39,5 +40,6 @@ std::unique_ptr<InstanceState> createInstanceState(const std::string& name) {
     if (name == "Running")   return std::unique_ptr<InstanceState>(new RunningInstance());
     if (name == "Completed") return std::unique_ptr<InstanceState>(new CompletedInstance());
     if (name == "Cancelled") return std::unique_ptr<InstanceState>(new CancelledInstance());
+    if (name == "AwaitingSignOff") return std::unique_ptr<InstanceState>(new AwaitingSignOffInstance());
     throw std::invalid_argument("Unknown InstanceState: " + name);
 }
