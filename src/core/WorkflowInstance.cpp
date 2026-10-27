@@ -3,6 +3,7 @@
 #include "patterns/execution/CreatedInstance.h"
 #include "patterns/execution/DepthFirstIterator.h"
 #include "patterns/structural/LeafWorkItem.h"
+#include "patterns/creation/WorkflowFactory.h"
 
 #include <stdexcept>
 #include <utility>
@@ -11,6 +12,7 @@ const char* const WorkflowInstance::CREATED   = "Created";
 const char* const WorkflowInstance::RUNNING   = "Running";
 const char* const WorkflowInstance::COMPLETED = "Completed";
 const char* const WorkflowInstance::CANCELLED = "Cancelled";
+const char* const WorkflowInstance::AWAITING_SIGNOFF = "AwaitingSignOff";
 
 // ---------------------------------------------------------
 // Construction
@@ -22,7 +24,9 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
       root_(new CompositeStage(id, definition.name)),
       instanceState_(new CreatedInstance()),
       state_(instanceState_->name()),
-      currentStage_(0)
+      currentStage_(0),
+      name_(definition.name),
+      requiresSignOff_(false)
 {
     // One CompositeStage per declared stage.
     for (std::size_t i = 0; i < definition_.stages.size(); ++i) {
@@ -42,6 +46,53 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
     }
 }
 
+WorkflowInstance::WorkflowInstance(const std::string& id,
+                                   const WorkflowDefinition& definition,
+                                   const WorkflowFactory& factory,
+                                   const std::string& title)
+    : id_(id),
+      definition_(definition),
+      root_(factory.createStage(id, title.empty() ? definition.name : title)),
+      instanceState_(new CreatedInstance()),
+      state_(instanceState_->name()),
+      currentStage_(0),
+      name_(title.empty() ? definition.name : title),
+      requiresSignOff_(false)
+{
+    definition_.stages.clear();
+    for (std::size_t i = 0; i < definition.layout.size(); ++i) {
+        const StageTemplate& spec = definition.layout[i];
+        CompositeStage* parent = root_.get();
+        if (!spec.parent.empty()) {
+            parent = dynamic_cast<CompositeStage*>(root_->find(spec.parent));
+            if (parent == nullptr) {
+                throw std::invalid_argument("Unknown parent stage: " + spec.parent);
+            }
+        } else {
+            definition_.stages.push_back(spec.id);
+        }
+        parent->add(std::unique_ptr<WorkNode>(factory.createStage(spec.id, spec.name).release()));
+    }
+
+    for (std::size_t i = 0; i < definition.templates.size(); ++i) {
+        const ItemTemplate& spec = definition.templates[i];
+        std::unique_ptr<LeafWorkItem> leaf = factory.createWorkItem(spec.id, spec.name, spec.role);
+        leaf->setApproverRoles(spec.approverRoles);
+        leaf->setPriority(spec.priority.empty() ? std::string("Medium") : spec.priority);
+        if (!spec.unit.empty()) leaf->setUnit(spec.unit);
+        for (std::size_t b = 0; b < spec.blockedBy.size(); ++b) {
+            leaf->addBlocker(spec.blockedBy[b]);
+        }
+        CompositeStage* stage = spec.stage.empty()
+            ? root_.get()
+            : dynamic_cast<CompositeStage*>(root_->find(spec.stage));
+        if (stage == nullptr) {
+            throw std::invalid_argument("Unknown stage for item " + spec.id + ": " + spec.stage);
+        }
+        stage->add(std::unique_ptr<WorkNode>(leaf.release()));
+    }
+}
+
 // ---------------------------------------------------------
 // Accessors
 // ---------------------------------------------------------
@@ -50,6 +101,8 @@ const std::string& WorkflowInstance::title() const             { return definiti
 const std::string& WorkflowInstance::state() const             { return state_; }
 const std::string& WorkflowInstance::reason() const            { return reason_; }
 const WorkflowDefinition& WorkflowInstance::definition() const { return definition_; }
+const std::string& WorkflowInstance::name() const              { return name_; }
+std::size_t WorkflowInstance::currentStageIndex() const        { return currentStage_; }
 CompositeStage& WorkflowInstance::root() const                 { return *root_; }
 
 WorkNode* WorkflowInstance::currentStage() const {
@@ -214,6 +267,82 @@ bool WorkflowInstance::addWorkItem(const std::string& stageId,
     return true;
 }
 
+std::size_t WorkflowInstance::topLevelIndex(const WorkNode* node) const {
+    const WorkNode* cursor = node;
+    while (cursor != nullptr && cursor->parent() != root_.get()) {
+        cursor = cursor->parent();
+    }
+    for (std::size_t i = 0; i < root_->childCount(); ++i) {
+        if (root_->child(i) == cursor) return i;
+    }
+    return root_->childCount();
+}
+
+bool WorkflowInstance::isActive(const WorkNode* node) const {
+    if (state_ != RUNNING || node == nullptr) return false;
+    if (definition_.stages.empty()) return true;
+    return topLevelIndex(node) <= currentStage_;
+}
+
+bool WorkflowInstance::adoptItem(const std::string& parentId, std::unique_ptr<LeafWorkItem> leaf) {
+    if (!leaf) return false;
+    WorkNode* parent = root_->find(parentId);
+    if (parent == nullptr) return false;
+    if (root_->find(leaf->id()) != nullptr) return false;
+    LeafWorkItem* added = leaf.get();
+    CompositeStage* stage = dynamic_cast<CompositeStage*>(parent);
+    LeafWorkItem* parentItem = dynamic_cast<LeafWorkItem*>(parent);
+    if (stage != nullptr) {
+        stage->add(std::unique_ptr<WorkNode>(leaf.release()));
+    } else if (parentItem != nullptr) {
+        parentItem->addSubtask(std::move(leaf));
+    } else {
+        return false;
+    }
+    bool waitsForSiblings = false;
+    if (stage != nullptr && stage->mode().name() == "Sequential") {
+        for (std::size_t i = 0; i + 1 < stage->childCount(); ++i) {
+            if (!stage->child(i)->isComplete()) waitsForSiblings = true;
+        }
+    }
+    if (isActive(parent) && !waitsForSiblings &&
+        (parentItem == nullptr || parentItem->status() != WorkItem::CREATED)) {
+        added->makeAvailable();
+    }
+    return true;
+}
+
+bool WorkflowInstance::requiresSignOff() const { return requiresSignOff_; }
+
+void WorkflowInstance::setRequiresSignOff(bool required) { requiresSignOff_ = required; }
+
+void WorkflowInstance::signOff() { instanceState_->signOff(*this); }
+
+CompositeStage& WorkflowInstance::reopenForFixes(const WorkflowFactory& factory) {
+    instanceState_->reopen(*this);
+    const std::string fixesId = id_ + "-fixes";
+    CompositeStage* fixes = dynamic_cast<CompositeStage*>(root_->find(fixesId));
+    if (fixes == nullptr) {
+        root_->add(std::unique_ptr<WorkNode>(factory.createStage(fixesId, "Sign-off fixes").release()));
+        definition_.stages.push_back(fixesId);
+        fixes = dynamic_cast<CompositeStage*>(root_->find(fixesId));
+    }
+    currentStage_ = topLevelIndex(fixes);
+    return *fixes;
+}
+
+void WorkflowInstance::rebuild(const WorkflowDefinition& definition, const std::string& name,
+                               std::unique_ptr<CompositeStage> root, const std::string& state,
+                               std::size_t stageIndex, const std::string& reason, bool signOffRequired) {
+    definition_ = definition;
+    name_ = name;
+    root_ = std::move(root);
+    setState(createInstanceState(state));
+    currentStage_ = stageIndex;
+    reason_ = reason;
+    requiresSignOff_ = signOffRequired;
+}
+
 // ---------------------------------------------------------
 // Memento
 // ---------------------------------------------------------
@@ -221,6 +350,7 @@ std::shared_ptr<InstanceMemento>
 WorkflowInstance::createMemento(const std::string& label) const {
     std::shared_ptr<InstanceMemento> m(
         new InstanceMemento(label, instanceState_->name()));
+    m->setStageIndex(currentStage_);
 
     DepthFirstIterator it(root_.get());
     for (it.first(); !it.isDone(); it.next()) {
@@ -228,7 +358,8 @@ WorkflowInstance::createMemento(const std::string& label) const {
         if (leaf != nullptr) {
             m->addItem(WorkItemSnapshot(leaf->status(),
                                         leaf->assignee(),
-                                        leaf->reason()));
+                                        leaf->reason(),
+                                        leaf->id()));
         }
     }
     return m;
@@ -239,6 +370,9 @@ void WorkflowInstance::restoreFromMemento(InstanceMemento* memento) {
 
     // 1. Rebuild the instance state object (not just the cached string).
     setState(createInstanceState(memento->getStatusName()));
+    if (memento->getStageIndex() < root_->childCount() || definition_.stages.empty()) {
+        currentStage_ = memento->getStageIndex();
+    }
 
     // 2. Rebuild every leaf's polymorphic state object.
     const std::vector<WorkItemSnapshot>& snaps = memento->getItems();
@@ -247,11 +381,21 @@ void WorkflowInstance::restoreFromMemento(InstanceMemento* memento) {
     for (it.first(); !it.isDone(); it.next()) {
         LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(it.currentItem());
         if (leaf == nullptr) continue;
-        if (i >= snaps.size()) break;
 
-        leaf->restore(snaps[i].getStateName(),
-                      snaps[i].getAssignee(),
-                      snaps[i].getReason());
+        const WorkItemSnapshot* snap = nullptr;
+        for (std::size_t s = 0; s < snaps.size() && snap == nullptr; ++s) {
+            if (!snaps[s].getItemId().empty() && snaps[s].getItemId() == leaf->id()) {
+                snap = &snaps[s];
+            }
+        }
+        if (snap == nullptr && i < snaps.size() && snaps[i].getItemId().empty()) {
+            snap = &snaps[i];
+        }
         ++i;
+        if (snap == nullptr) continue;
+
+        leaf->restore(snap->getStateName(),
+                      snap->getAssignee(),
+                      snap->getReason());
     }
 }

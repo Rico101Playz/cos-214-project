@@ -7,5 +7,8 @@
 std::string CreatedState::name() const { return "Created"; }
 
 void CreatedState::makeAvailable(LeafWorkItem& item) {
+    if (item.isBlocked()) {
+        return;
+    }
     item.transitionTo(std::unique_ptr<WorkItemState>(new AvailableState()));
 }

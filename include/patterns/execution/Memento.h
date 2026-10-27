@@ -14,13 +14,16 @@ private:
     std::string stateName;
     std::string assignee;
     std::string reason;
+    std::string itemId;
 
 public:
-    WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason);
+    WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason,
+                     std::string itemId = "");
 
     const std::string& getStateName() const;
     const std::string& getAssignee() const;
     const std::string& getReason() const;
+    const std::string& getItemId() const;
 };
 
 // ---------------------------------------------------------
@@ -49,9 +52,13 @@ private:
     std::string statusName;
     std::vector<WorkItemSnapshot> items;
     std::vector<ApprovalSnapshot> approvals;
+    std::size_t stageIndex;
 
 public:
     InstanceMemento(std::string lbl, std::string statusName);
+
+    std::size_t getStageIndex() const;
+    void setStageIndex(std::size_t index);
 
     const std::string& getLabel() const;
     const std::string& getStatusName() const;
