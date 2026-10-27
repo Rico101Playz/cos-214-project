@@ -1,9 +1,9 @@
+#include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "test_utils.h"
 
 #include "core/WorkItem.h"
 #include "patterns/structural/WorkNode.h"
@@ -76,58 +76,52 @@ static WorkItem* itemAt(CompositeStage& root, const std::string& id) {
 // ============================================================================
 // TEST: DepthFirstIterator
 // ============================================================================
-void test_DepthFirstIterator() {
-    std::cout << "\n--- Testing DepthFirstIterator ---\n";
+TEST(Iterator, DepthFirstIterator) {
 
     CompositeStage root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
     DepthFirstIterator it(&root);
-    check(it.isDone() == false, "DepthFirstIterator: a new iterator is positioned on the root");
-    check(it.currentItem() == &root, "DepthFirstIterator: currentItem() starts at the root");
+    EXPECT_FALSE(it.isDone()) << "DepthFirstIterator: a new iterator is positioned on the root";
+    EXPECT_EQ(it.currentItem(), &root) << "DepthFirstIterator: currentItem() starts at the root";
 
-    check(join(walk(it)) == "delivery,build,implement,test,release,review,deploy,prod",
-          "DepthFirstIterator: visits nodes in pre-order, children in definition order");
+    EXPECT_EQ(join(walk(it)), "delivery,build,implement,test,release,review,deploy,prod") << "DepthFirstIterator: visits nodes in pre-order, children in definition order";
 
-    check(it.isDone() == true, "DepthFirstIterator: isDone() after the last node");
-    check(it.currentItem() == nullptr, "DepthFirstIterator: currentItem() is nullptr when done");
+    EXPECT_TRUE(it.isDone()) << "DepthFirstIterator: isDone() after the last node";
+    EXPECT_EQ(it.currentItem(), nullptr) << "DepthFirstIterator: currentItem() is nullptr when done";
     it.next();
-    check(it.isDone() == true, "DepthFirstIterator: next() past the end is harmless");
+    EXPECT_TRUE(it.isDone()) << "DepthFirstIterator: next() past the end is harmless";
 
     it.first();
-    check(it.currentItem() == &root, "DepthFirstIterator: first() restarts the walk");
-    check(walk(it).size() == 8, "DepthFirstIterator: a restarted walk visits every node again");
+    EXPECT_EQ(it.currentItem(), &root) << "DepthFirstIterator: first() restarts the walk";
+    EXPECT_EQ(walk(it).size(), 8u) << "DepthFirstIterator: a restarted walk visits every node again";
 
     DepthFirstIterator subtree(root.find("release"));
-    check(join(walk(subtree)) == "release,review,deploy,prod",
-          "DepthFirstIterator: can walk just a subtree");
+    EXPECT_EQ(join(walk(subtree)), "release,review,deploy,prod") << "DepthFirstIterator: can walk just a subtree";
 
     WorkItem single("solo", "Solo task", "Developer");
     DepthFirstIterator leaf(&single);
-    check(join(walk(leaf)) == "solo", "DepthFirstIterator: a leaf on its own is a one-node walk");
+    EXPECT_EQ(join(walk(leaf)), "solo") << "DepthFirstIterator: a leaf on its own is a one-node walk";
 
     DepthFirstIterator empty(nullptr);
-    check(empty.isDone() == true, "DepthFirstIterator: a null root is an empty walk");
-    check(empty.currentItem() == nullptr, "DepthFirstIterator: a null root has no current item");
+    EXPECT_TRUE(empty.isDone()) << "DepthFirstIterator: a null root is an empty walk";
+    EXPECT_EQ(empty.currentItem(), nullptr) << "DepthFirstIterator: a null root has no current item";
 }
 
 // ============================================================================
 // TEST: WorkNode::createIterator (factory method)
 // ============================================================================
-void test_CreateIterator() {
-    std::cout << "\n--- Testing WorkNode::createIterator ---\n";
+TEST(Iterator, CreateIterator) {
 
     CompositeStage root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
     std::unique_ptr<WorkIterator> it = root.createIterator();
-    check(it != nullptr, "createIterator: returns an iterator");
-    check(join(walk(*it)) == "delivery,build,implement,test,release,review,deploy,prod",
-          "createIterator: the iterator walks the whole tree depth-first");
+    EXPECT_NE(it, nullptr) << "createIterator: returns an iterator";
+    EXPECT_EQ(join(walk(*it)), "delivery,build,implement,test,release,review,deploy,prod") << "createIterator: the iterator walks the whole tree depth-first";
 
     std::unique_ptr<WorkIterator> fromStage = root.find("build")->createIterator();
-    check(join(walk(*fromStage)) == "build,implement,test",
-          "createIterator: an iterator from a stage covers only that stage");
+    EXPECT_EQ(join(walk(*fromStage)), "build,implement,test") << "createIterator: an iterator from a stage covers only that stage";
 
     // Counting items through the abstract interface only.
     int items = 0;
@@ -136,68 +130,52 @@ void test_CreateIterator() {
             ++items;
         }
     }
-    check(items == 4, "createIterator: callers can count leaves without knowing the tree layout");
+    EXPECT_EQ(items, 4) << "createIterator: callers can count leaves without knowing the tree layout";
 }
 
 // ============================================================================
 // TEST: ReadyOnlyIterator
 // ============================================================================
-void test_ReadyOnlyIterator() {
-    std::cout << "\n--- Testing ReadyOnlyIterator ---\n";
+TEST(Iterator, ReadyOnlyIterator) {
 
     CompositeStage root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
     ReadyOnlyIterator it(&root);
-    check(it.isDone() == true, "ReadyOnlyIterator: nothing is ready before work is released");
-    check(it.currentItem() == nullptr, "ReadyOnlyIterator: no current item when nothing is ready");
+    EXPECT_TRUE(it.isDone()) << "ReadyOnlyIterator: nothing is ready before work is released";
+    EXPECT_EQ(it.currentItem(), nullptr) << "ReadyOnlyIterator: no current item when nothing is ready";
 
     itemAt(root, "implement")->makeAvailable();
     itemAt(root, "test")->makeAvailable();
     itemAt(root, "prod")->makeAvailable();
 
-    check(join(walk(it)) == "implement,test,prod",
-          "ReadyOnlyIterator: yields only ready items, in depth-first order");
+    EXPECT_EQ(join(walk(it)), "implement,test,prod") << "ReadyOnlyIterator: yields only ready items, in depth-first order";
 
     it.first();
-    check(it.currentItem() == root.find("implement"),
-          "ReadyOnlyIterator: first() lands on the first ready item");
+    EXPECT_EQ(it.currentItem(), root.find("implement")) << "ReadyOnlyIterator: first() lands on the first ready item";
 
     itemAt(root, "implement")->assign("Alice");
-    check(join(walk(it)) == "test,prod",
-          "ReadyOnlyIterator: an item stops being yielded once it is assigned");
+    EXPECT_EQ(join(walk(it)), "test,prod") << "ReadyOnlyIterator: an item stops being yielded once it is assigned";
 
     itemAt(root, "test")->cancel();
     itemAt(root, "prod")->assign("Erin");
-    check(walk(it).empty(), "ReadyOnlyIterator: cancelled and taken work is skipped");
+    EXPECT_TRUE(walk(it).empty()) << "ReadyOnlyIterator: cancelled and taken work is skipped";
 
     itemAt(root, "review")->makeAvailable();
     ReadyOnlyIterator release(root.find("release"));
-    check(join(walk(release)) == "review", "ReadyOnlyIterator: can be limited to a subtree");
+    EXPECT_EQ(join(walk(release)), "review") << "ReadyOnlyIterator: can be limited to a subtree";
 
     ReadyOnlyIterator empty(nullptr);
-    check(empty.isDone() == true, "ReadyOnlyIterator: a null root is an empty walk");
+    EXPECT_TRUE(empty.isDone()) << "ReadyOnlyIterator: a null root is an empty walk";
 
     // Both concrete iterators are interchangeable behind WorkIterator.
     std::vector<std::unique_ptr<WorkIterator> > iterators;
     iterators.push_back(std::unique_ptr<WorkIterator>(new DepthFirstIterator(&root)));
     iterators.push_back(std::unique_ptr<WorkIterator>(new ReadyOnlyIterator(&root)));
-    check(walk(*iterators[0]).size() == 8 && walk(*iterators[1]).size() == 1,
-          "ReadyOnlyIterator: used through WorkIterator like any other iterator");
+    EXPECT_TRUE(walk(*iterators[0]).size() == 8 && walk(*iterators[1]).size() == 1) << "ReadyOnlyIterator: used through WorkIterator like any other iterator";
 }
 
 // ============================================================================
 // MAIN
 // ============================================================================
-void run_iterator_tests() {
-    std::cout << "\n--- Running Iterator (work tree traversal) Tests ---\n";
-    int passedBefore = testsPassed;
-    int failedBefore = testsFailed;
 
-    test_DepthFirstIterator();
-    test_CreateIterator();
-    test_ReadyOnlyIterator();
-
-    std::cout << "Iterator Tests: " << (testsPassed - passedBefore) << " passed, "
-              << (testsFailed - failedBefore) << " failed.\n";
-}

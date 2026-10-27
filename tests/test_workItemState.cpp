@@ -1,8 +1,8 @@
+#include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <string>
 
-#include "test_utils.h"
 #include "state_test_helpers.h"
 
 #include "patterns/execution/CreatedState.h"
@@ -79,210 +79,176 @@ static bool tryOp(LeafWorkItem& item, const std::string& op) {
 // ============================================================================
 // TESTS
 // ============================================================================
-static void test_StateNames() {
-    std::cout << "\n--- Testing concrete state names ---\n";
-    check(CreatedState().name() == "Created", "CreatedState: name()");
-    check(AvailableState().name() == "Available", "AvailableState: name()");
-    check(AssignedState().name() == "Assigned", "AssignedState: name()");
-    check(InProgressState().name() == "InProgress", "InProgressState: name()");
-    check(AwaitingApprovalState().name() == "AwaitingApproval", "AwaitingApprovalState: name()");
-    check(CompletedState().name() == "Completed", "CompletedState: name()");
-    check(RejectedState().name() == "Rejected", "RejectedState: name()");
-    check(CancelledState().name() == "Cancelled", "CancelledState: name()");
-    check(EscalatedState().name() == "Escalated", "EscalatedState: name()");
+TEST(WorkItemState, StateNames) {
+    EXPECT_EQ(CreatedState().name(), "Created") << "CreatedState: name()";
+    EXPECT_EQ(AvailableState().name(), "Available") << "AvailableState: name()";
+    EXPECT_EQ(AssignedState().name(), "Assigned") << "AssignedState: name()";
+    EXPECT_EQ(InProgressState().name(), "InProgress") << "InProgressState: name()";
+    EXPECT_EQ(AwaitingApprovalState().name(), "AwaitingApproval") << "AwaitingApprovalState: name()";
+    EXPECT_EQ(CompletedState().name(), "Completed") << "CompletedState: name()";
+    EXPECT_EQ(RejectedState().name(), "Rejected") << "RejectedState: name()";
+    EXPECT_EQ(CancelledState().name(), "Cancelled") << "CancelledState: name()";
+    EXPECT_EQ(EscalatedState().name(), "Escalated") << "EscalatedState: name()";
 }
 
-static void test_InitialState() {
-    std::cout << "\n--- Testing a new LeafWorkItem ---\n";
+TEST(WorkItemState, InitialState) {
     LeafWorkItem item("t1", "Write code", "Developer", 8);
-    check(item.status() == "Created", "LeafWorkItem: starts in Created");
-    check(item.state == "Created", "LeafWorkItem: legacy 'state' mirror starts as Created");
-    check(item.id() == "t1" && item.name() == "Write code", "LeafWorkItem: keeps id and name");
-    check(item.role() == "Developer", "LeafWorkItem: keeps role");
-    check(item.dueHours() == 8, "LeafWorkItem: keeps dueHours");
-    check(item.assignee().empty() && item.reason().empty(), "LeafWorkItem: no assignee or reason yet");
-    check(!item.isComplete() && nearly(item.progress(), 0.0), "LeafWorkItem: not complete, progress 0");
-    check(!item.isReady(), "LeafWorkItem: a Created item is not ready");
+    EXPECT_EQ(item.status(), "Created") << "LeafWorkItem: starts in Created";
+    EXPECT_EQ(item.state, "Created") << "LeafWorkItem: legacy 'state' mirror starts as Created";
+    EXPECT_TRUE(item.id() == "t1" && item.name() == "Write code") << "LeafWorkItem: keeps id and name";
+    EXPECT_EQ(item.role(), "Developer") << "LeafWorkItem: keeps role";
+    EXPECT_EQ(item.dueHours(), 8) << "LeafWorkItem: keeps dueHours";
+    EXPECT_TRUE(item.assignee().empty() && item.reason().empty()) << "LeafWorkItem: no assignee or reason yet";
+    EXPECT_TRUE(!item.isComplete() && nearly(item.progress(), 0.0)) << "LeafWorkItem: not complete, progress 0";
+    EXPECT_FALSE(item.isReady()) << "LeafWorkItem: a Created item is not ready";
 }
 
-static void test_HappyPath() {
-    std::cout << "\n--- Testing the full lifecycle ---\n";
+TEST(WorkItemState, HappyPath) {
     LeafWorkItem item("t1", "Task", "Developer");
 
     item.makeAvailable();
-    check(item.status() == "Available", "Happy path: Created -> Available");
-    check(item.isReady(), "Happy path: an Available item is ready");
+    EXPECT_EQ(item.status(), "Available") << "Happy path: Created -> Available";
+    EXPECT_TRUE(item.isReady()) << "Happy path: an Available item is ready";
 
     item.assign("alice");
-    check(item.status() == "Assigned" && item.assignee() == "alice", "Happy path: Available -> Assigned (assignee recorded)");
-    check(!item.isReady(), "Happy path: an Assigned item is no longer ready");
+    EXPECT_TRUE(item.status() == "Assigned" && item.assignee() == "alice") << "Happy path: Available -> Assigned (assignee recorded)";
+    EXPECT_FALSE(item.isReady()) << "Happy path: an Assigned item is no longer ready";
 
     item.start();
-    check(item.status() == "InProgress", "Happy path: Assigned -> InProgress");
+    EXPECT_EQ(item.status(), "InProgress") << "Happy path: Assigned -> InProgress";
 
     item.complete();
-    check(item.status() == "AwaitingApproval", "Happy path: InProgress -> AwaitingApproval (complete needs approval)");
-    check(!item.isComplete(), "Happy path: not complete until approved");
+    EXPECT_EQ(item.status(), "AwaitingApproval") << "Happy path: InProgress -> AwaitingApproval (complete needs approval)";
+    EXPECT_FALSE(item.isComplete()) << "Happy path: not complete until approved";
 
     item.approve();
-    check(item.status() == "Completed", "Happy path: AwaitingApproval -> Completed");
-    check(item.isComplete() && nearly(item.progress(), 1.0), "Happy path: Completed means complete, progress 1.0");
-    check(item.state == "Completed", "Happy path: legacy 'state' mirror follows along");
+    EXPECT_EQ(item.status(), "Completed") << "Happy path: AwaitingApproval -> Completed";
+    EXPECT_TRUE(item.isComplete() && nearly(item.progress(), 1.0)) << "Happy path: Completed means complete, progress 1.0";
+    EXPECT_EQ(item.state, "Completed") << "Happy path: legacy 'state' mirror follows along";
 }
 
-static void test_TransitionMatrix() {
-    std::cout << "\n--- Testing every state x operation (legal accepted, illegal refused) ---\n";
+TEST(WorkItemState, TransitionMatrix) {
     const int rows = sizeof(kRows) / sizeof(kRows[0]);
     for (int r = 0; r < rows; ++r) {
         for (int o = 0; o < kOpCount; ++o) {
             LeafWorkItem item("m", "Matrix", "Developer");
             driveTo(item, kRows[r].state);
             std::string before = item.status();
-            check(before == kRows[r].state, (std::string("setup reaches ") + kRows[r].state).c_str());
+            EXPECT_EQ(before, kRows[r].state) << (std::string("setup reaches ") + kRows[r].state).c_str();
 
             bool legal = std::string(kRows[r].legalOps).find(std::string(" ") + kOps[o] + " ") != std::string::npos;
             bool accepted = tryOp(item, kOps[o]);
 
             std::string label = std::string(kRows[r].state) + " + " + kOps[o] + (legal ? " is accepted" : " is refused");
-            check(accepted == legal, label.c_str());
+            EXPECT_EQ(accepted, legal) << label.c_str();
             if (!legal) {
-                check(item.status() == before, (label + " and leaves the state unchanged").c_str());
+                EXPECT_EQ(item.status(), before) << (label + " and leaves the state unchanged").c_str();
             }
         }
     }
 }
 
-static void test_RejectAndRework() {
-    std::cout << "\n--- Testing rejection and rework ---\n";
+TEST(WorkItemState, RejectAndRework) {
     LeafWorkItem item("r1", "Rework me", "Developer");
     driveTo(item, "InProgress");
 
     item.reject("needs more tests");
-    check(item.status() == "Rejected", "Reject: InProgress -> Rejected");
-    check(item.reason() == "needs more tests", "Reject: the reason is stored");
+    EXPECT_EQ(item.status(), "Rejected") << "Reject: InProgress -> Rejected";
+    EXPECT_EQ(item.reason(), "needs more tests") << "Reject: the reason is stored";
 
     item.start();
-    check(item.status() == "InProgress", "Rework: Rejected -> InProgress (same assignee carries on)");
-    check(item.reason() == "needs more tests", "Rework: the reason is kept until reassignment");
+    EXPECT_EQ(item.status(), "InProgress") << "Rework: Rejected -> InProgress (same assignee carries on)";
+    EXPECT_EQ(item.reason(), "needs more tests") << "Rework: the reason is kept until reassignment";
 
     item.complete();
     item.reject("wrong approach");
-    check(item.status() == "Rejected" && item.reason() == "wrong approach",
-          "Reject: AwaitingApproval -> Rejected, reason replaced");
+    EXPECT_TRUE(item.status() == "Rejected" && item.reason() == "wrong approach") << "Reject: AwaitingApproval -> Rejected, reason replaced";
 
     item.assign("carol");
-    check(item.status() == "Assigned" && item.assignee() == "carol", "Reassign: Rejected -> Assigned to someone else");
-    check(item.reason().empty(), "Reassign: a fresh assignment clears the rejection reason");
+    EXPECT_TRUE(item.status() == "Assigned" && item.assignee() == "carol") << "Reassign: Rejected -> Assigned to someone else";
+    EXPECT_TRUE(item.reason().empty()) << "Reassign: a fresh assignment clears the rejection reason";
 }
 
-static void test_ReassignAndEscalate() {
-    std::cout << "\n--- Testing reassignment and escalation ---\n";
+TEST(WorkItemState, ReassignAndEscalate) {
     LeafWorkItem item("e1", "Escalate me", "Developer");
     driveTo(item, "Assigned");
 
     item.assign("bob");
-    check(item.status() == "Assigned" && item.assignee() == "bob", "Reassign: Assigned stays Assigned, assignee changes");
+    EXPECT_TRUE(item.status() == "Assigned" && item.assignee() == "bob") << "Reassign: Assigned stays Assigned, assignee changes";
 
     item.escalate();
-    check(item.status() == "Escalated", "Escalate: Assigned -> Escalated");
-    check(throwsLogicError([&]{ item.start(); }), "Escalated: cannot be started before reassignment");
-    check(throwsLogicError([&]{ item.complete(); }), "Escalated: cannot be completed before reassignment");
+    EXPECT_EQ(item.status(), "Escalated") << "Escalate: Assigned -> Escalated";
+    EXPECT_THROW(([&]{ item.start(); })(), std::logic_error) << "Escalated: cannot be started before reassignment";
+    EXPECT_THROW(([&]{ item.complete(); })(), std::logic_error) << "Escalated: cannot be completed before reassignment";
 
     item.assign("dave");
-    check(item.status() == "Assigned" && item.assignee() == "dave", "Escalated: assign -> Assigned again");
+    EXPECT_TRUE(item.status() == "Assigned" && item.assignee() == "dave") << "Escalated: assign -> Assigned again";
 
     item.start();
     item.escalate();
-    check(item.status() == "Escalated", "Escalate: InProgress -> Escalated");
+    EXPECT_EQ(item.status(), "Escalated") << "Escalate: InProgress -> Escalated";
 }
 
-static void test_Cancel() {
-    std::cout << "\n--- Testing cancel from every state ---\n";
+TEST(WorkItemState, Cancel) {
     for (int s = 0; s < kStateCount; ++s) {
         LeafWorkItem item("c", "Cancel me", "Developer");
         driveTo(item, kStates[s]);
         item.cancel();
         std::string expected = (std::string(kStates[s]) == "Completed") ? "Completed" : "Cancelled";
         std::string label = std::string("Cancel from ") + kStates[s] + " gives " + expected;
-        check(item.status() == expected, label.c_str());
+        EXPECT_EQ(item.status(), expected) << label.c_str();
     }
 
     LeafWorkItem item("c2", "Cancelled", "Developer");
     item.cancel();
-    check(!tryOp(item, "assign") && !tryOp(item, "start"), "Cancel: a cancelled item accepts no further work");
+    EXPECT_TRUE(!tryOp(item, "assign") && !tryOp(item, "start")) << "Cancel: a cancelled item accepts no further work";
 }
 
-static void test_ErrorMessages() {
-    std::cout << "\n--- Testing illegal-transition messages ---\n";
+TEST(WorkItemState, ErrorMessages) {
     LeafWorkItem item("x", "Message", "Developer");
-    check(throwsLogicErrorContaining([&]{ item.start(); }, "Illegal transition"), "Message: says it is an illegal transition");
-    check(throwsLogicErrorContaining([&]{ item.start(); }, "start"), "Message: names the operation");
-    check(throwsLogicErrorContaining([&]{ item.start(); }, "Created"), "Message: names the current state");
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ item.start(); }, "Illegal transition")) << "Message: says it is an illegal transition";
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ item.start(); }, "start")) << "Message: names the operation";
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ item.start(); }, "Created")) << "Message: names the current state";
 
     CompletedState done;
-    check(throwsLogicErrorContaining([&]{ done.escalate(item); }, "Completed"),
-          "Message: the base-class helper reports the state that refused");
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ done.escalate(item); }, "Completed")) << "Message: the base-class helper reports the state that refused";
 }
 
-static void test_Restore() {
-    std::cout << "\n--- Testing restore() (used by Memento) ---\n";
+TEST(WorkItemState, Restore) {
     LeafWorkItem item("s1", "Snapshot me", "Developer");
 
     item.restore("InProgress", "erin", "");
-    check(item.status() == "InProgress" && item.assignee() == "erin", "Restore: sets state and assignee");
-    check(item.state == "InProgress", "Restore: legacy 'state' mirror follows");
+    EXPECT_TRUE(item.status() == "InProgress" && item.assignee() == "erin") << "Restore: sets state and assignee";
+    EXPECT_EQ(item.state, "InProgress") << "Restore: legacy 'state' mirror follows";
     item.complete();
-    check(item.status() == "AwaitingApproval", "Restore: the restored state object behaves correctly");
+    EXPECT_EQ(item.status(), "AwaitingApproval") << "Restore: the restored state object behaves correctly";
 
     item.restore("Rejected", "frank", "bad naming");
-    check(item.status() == "Rejected" && item.reason() == "bad naming", "Restore: sets the reason too");
+    EXPECT_TRUE(item.status() == "Rejected" && item.reason() == "bad naming") << "Restore: sets the reason too";
 
-    check(throwsInvalidArgument([&]{ item.restore("Nonsense", "", ""); }), "Restore: an unknown state name throws");
-    check(item.status() == "Rejected", "Restore: a failed restore leaves the item untouched");
+    EXPECT_THROW(([&]{ item.restore("Nonsense", "", ""); })(), std::invalid_argument) << "Restore: an unknown state name throws";
+    EXPECT_EQ(item.status(), "Rejected") << "Restore: a failed restore leaves the item untouched";
 }
 
-static void test_NullTransition() {
-    std::cout << "\n--- Testing transitionTo(nullptr) ---\n";
+TEST(WorkItemState, NullTransition) {
     LeafWorkItem item("n1", "Null", "Developer");
-    check(throwsInvalidArgument([&]{ item.transitionTo(std::unique_ptr<WorkItemState>()); }),
-          "transitionTo: a null state is rejected");
-    check(item.status() == "Created", "transitionTo: the item is unchanged after the rejection");
+    EXPECT_THROW(([&]{ item.transitionTo(std::unique_ptr<WorkItemState>()); })(), std::invalid_argument) << "transitionTo: a null state is rejected";
+    EXPECT_EQ(item.status(), "Created") << "transitionTo: the item is unchanged after the rejection";
 }
 
-static void test_PolymorphicUse() {
-    std::cout << "\n--- Testing use through the WorkItem / WorkNode interfaces ---\n";
+TEST(WorkItemState, PolymorphicUse) {
     LeafWorkItem leaf("p1", "Poly", "Developer");
     WorkItem& asItem = leaf;
     asItem.makeAvailable();
     asItem.assign("gina");
-    check(leaf.status() == "Assigned", "Polymorphism: WorkItem calls reach the State machine");
+    EXPECT_EQ(leaf.status(), "Assigned") << "Polymorphism: WorkItem calls reach the State machine";
 
     WorkNode& asNode = leaf;
-    check(!asNode.isComplete() && nearly(asNode.progress(), 0.0), "Polymorphism: WorkNode queries work");
+    EXPECT_TRUE(!asNode.isComplete() && nearly(asNode.progress(), 0.0)) << "Polymorphism: WorkNode queries work";
     asNode.cancel();
-    check(leaf.status() == "Cancelled", "Polymorphism: WorkNode::cancel() reaches LeafWorkItem::cancel()");
+    EXPECT_EQ(leaf.status(), "Cancelled") << "Polymorphism: WorkNode::cancel() reaches LeafWorkItem::cancel()";
 }
 
 // ============================================================================
 // MAIN
 // ============================================================================
-void run_workitem_state_tests() {
-    std::cout << "\n--- Running WorkItem State Tests ---\n";
-    int passedBefore = testsPassed;
-    int failedBefore = testsFailed;
-
-    test_StateNames();
-    test_InitialState();
-    test_HappyPath();
-    test_TransitionMatrix();
-    test_RejectAndRework();
-    test_ReassignAndEscalate();
-    test_Cancel();
-    test_ErrorMessages();
-    test_Restore();
-    test_NullTransition();
-    test_PolymorphicUse();
-
-    std::cout << "WorkItem State Tests: " << (testsPassed - passedBefore) << " passed, "
-              << (testsFailed - failedBefore) << " failed.\n";
-}
