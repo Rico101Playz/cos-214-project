@@ -1,7 +1,7 @@
-#include "patterns/execution/DepthFirstIterator.h"
-#include "patterns/structural/WorkNode.h"
+#include "iterator/DepthFirstIterator.h"
+#include "composite/Task.h"
 
-DepthFirstIterator::DepthFirstIterator(WorkNode* root) : root_(root) {
+DepthFirstIterator::DepthFirstIterator(Task* root) : root_(root) {
     first();
 }
 
@@ -16,7 +16,7 @@ void DepthFirstIterator::next() {
     if (pending_.empty()) {
         return;
     }
-    WorkNode* current = pending_.back();
+    Task* current = pending_.back();
     pending_.pop_back();
 
     // Push children last-to-first so the first child is visited next.
@@ -27,6 +27,6 @@ void DepthFirstIterator::next() {
 
 bool DepthFirstIterator::isDone() const { return pending_.empty(); }
 
-WorkNode* DepthFirstIterator::currentItem() const {
+Task* DepthFirstIterator::currentItem() const {
     return pending_.empty() ? nullptr : pending_.back();
 }

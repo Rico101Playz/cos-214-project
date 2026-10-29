@@ -5,12 +5,12 @@
 #include <vector>
 
 
-#include "core/WorkItem.h"
-#include "patterns/structural/WorkNode.h"
-#include "patterns/structural/CompositeStage.h"
-#include "patterns/execution/WorkIterator.h"
-#include "patterns/execution/DepthFirstIterator.h"
-#include "patterns/execution/ReadyOnlyIterator.h"
+#include "composite/LeafTask.h"
+#include "composite/Task.h"
+#include "composite/CompositeTask.h"
+#include "iterator/WorkIterator.h"
+#include "iterator/DepthFirstIterator.h"
+#include "iterator/FilterIterator.h"
 
 // ============================================================================
 // SCENARIO HELPER: a Software Feature Delivery work tree
@@ -24,28 +24,28 @@
 //       `-- deploy (Deploy)
 //           `-- prod  (Deploy to production)
 // ============================================================================
-static WorkItem* addItem(CompositeStage& stage, const std::string& id,
+static LeafTask* addItem(CompositeTask& stage, const std::string& id,
                          const std::string& name, const std::string& role) {
-    WorkItem* item = new WorkItem(id, name, role);
-    stage.add(std::unique_ptr<WorkNode>(item));
+    LeafTask* item = new LeafTask(id, name, role);
+    stage.add(std::unique_ptr<Task>(item));
     return item;
 }
 
-static CompositeStage* addStage(CompositeStage& parent, const std::string& id,
+static CompositeTask* addStage(CompositeTask& parent, const std::string& id,
                                 const std::string& name) {
-    CompositeStage* stage = new CompositeStage(id, name);
-    parent.add(std::unique_ptr<WorkNode>(stage));
+    CompositeTask* stage = new CompositeTask(id, name);
+    parent.add(std::unique_ptr<Task>(stage));
     return stage;
 }
 
-static void buildDeliveryTree(CompositeStage& root) {
-    CompositeStage* build = addStage(root, "build", "Build");
+static void buildDeliveryTree(CompositeTask& root) {
+    CompositeTask* build = addStage(root, "build", "Build");
     addItem(*build, "implement", "Implement feature", "Developer");
     addItem(*build, "test", "Write tests", "QA");
 
-    CompositeStage* release = addStage(root, "release", "Release");
+    CompositeTask* release = addStage(root, "release", "Release");
     addItem(*release, "review", "Code review", "Reviewer");
-    CompositeStage* deploy = addStage(*release, "deploy", "Deploy");
+    CompositeTask* deploy = addStage(*release, "deploy", "Deploy");
     addItem(*deploy, "prod", "Deploy to production", "ReleaseManager");
 }
 
@@ -69,8 +69,8 @@ static std::string join(const std::vector<std::string>& ids) {
     return result;
 }
 
-static WorkItem* itemAt(CompositeStage& root, const std::string& id) {
-    return static_cast<WorkItem*>(root.find(id));
+static LeafTask* itemAt(CompositeTask& root, const std::string& id) {
+    return static_cast<LeafTask*>(root.find(id));
 }
 
 // ============================================================================
@@ -78,7 +78,7 @@ static WorkItem* itemAt(CompositeStage& root, const std::string& id) {
 // ============================================================================
 TEST(Iterator, DepthFirstIterator) {
 
-    CompositeStage root("delivery", "Feature Delivery");
+    CompositeTask root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
     DepthFirstIterator it(&root);
@@ -99,7 +99,7 @@ TEST(Iterator, DepthFirstIterator) {
     DepthFirstIterator subtree(root.find("release"));
     EXPECT_EQ(join(walk(subtree)), "release,review,deploy,prod") << "DepthFirstIterator: can walk just a subtree";
 
-    WorkItem single("solo", "Solo task", "Developer");
+    LeafTask single("solo", "Solo task", "Developer");
     DepthFirstIterator leaf(&single);
     EXPECT_EQ(join(walk(leaf)), "solo") << "DepthFirstIterator: a leaf on its own is a one-node walk";
 
@@ -109,11 +109,11 @@ TEST(Iterator, DepthFirstIterator) {
 }
 
 // ============================================================================
-// TEST: WorkNode::createIterator (factory method)
+// TEST: Task::createIterator (factory method)
 // ============================================================================
 TEST(Iterator, CreateIterator) {
 
-    CompositeStage root("delivery", "Feature Delivery");
+    CompositeTask root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
     std::unique_ptr<WorkIterator> it = root.createIterator();
@@ -134,45 +134,45 @@ TEST(Iterator, CreateIterator) {
 }
 
 // ============================================================================
-// TEST: ReadyOnlyIterator
+// TEST: FilterIterator
 // ============================================================================
-TEST(Iterator, ReadyOnlyIterator) {
+TEST(Iterator, FilterIterator) {
 
-    CompositeStage root("delivery", "Feature Delivery");
+    CompositeTask root("delivery", "Feature Delivery");
     buildDeliveryTree(root);
 
-    ReadyOnlyIterator it(&root);
-    EXPECT_TRUE(it.isDone()) << "ReadyOnlyIterator: nothing is ready before work is released";
-    EXPECT_EQ(it.currentItem(), nullptr) << "ReadyOnlyIterator: no current item when nothing is ready";
+    FilterIterator it(&root);
+    EXPECT_TRUE(it.isDone()) << "FilterIterator: nothing is ready before work is released";
+    EXPECT_EQ(it.currentItem(), nullptr) << "FilterIterator: no current item when nothing is ready";
 
     itemAt(root, "implement")->makeAvailable();
     itemAt(root, "test")->makeAvailable();
     itemAt(root, "prod")->makeAvailable();
 
-    EXPECT_EQ(join(walk(it)), "implement,test,prod") << "ReadyOnlyIterator: yields only ready items, in depth-first order";
+    EXPECT_EQ(join(walk(it)), "implement,test,prod") << "FilterIterator: yields only ready items, in depth-first order";
 
     it.first();
-    EXPECT_EQ(it.currentItem(), root.find("implement")) << "ReadyOnlyIterator: first() lands on the first ready item";
+    EXPECT_EQ(it.currentItem(), root.find("implement")) << "FilterIterator: first() lands on the first ready item";
 
     itemAt(root, "implement")->assign("Alice");
-    EXPECT_EQ(join(walk(it)), "test,prod") << "ReadyOnlyIterator: an item stops being yielded once it is assigned";
+    EXPECT_EQ(join(walk(it)), "test,prod") << "FilterIterator: an item stops being yielded once it is assigned";
 
     itemAt(root, "test")->cancel();
     itemAt(root, "prod")->assign("Erin");
-    EXPECT_TRUE(walk(it).empty()) << "ReadyOnlyIterator: cancelled and taken work is skipped";
+    EXPECT_TRUE(walk(it).empty()) << "FilterIterator: cancelled and taken work is skipped";
 
     itemAt(root, "review")->makeAvailable();
-    ReadyOnlyIterator release(root.find("release"));
-    EXPECT_EQ(join(walk(release)), "review") << "ReadyOnlyIterator: can be limited to a subtree";
+    FilterIterator release(root.find("release"));
+    EXPECT_EQ(join(walk(release)), "review") << "FilterIterator: can be limited to a subtree";
 
-    ReadyOnlyIterator empty(nullptr);
-    EXPECT_TRUE(empty.isDone()) << "ReadyOnlyIterator: a null root is an empty walk";
+    FilterIterator empty(nullptr);
+    EXPECT_TRUE(empty.isDone()) << "FilterIterator: a null root is an empty walk";
 
     // Both concrete iterators are interchangeable behind WorkIterator.
     std::vector<std::unique_ptr<WorkIterator> > iterators;
     iterators.push_back(std::unique_ptr<WorkIterator>(new DepthFirstIterator(&root)));
-    iterators.push_back(std::unique_ptr<WorkIterator>(new ReadyOnlyIterator(&root)));
-    EXPECT_TRUE(walk(*iterators[0]).size() == 8 && walk(*iterators[1]).size() == 1) << "ReadyOnlyIterator: used through WorkIterator like any other iterator";
+    iterators.push_back(std::unique_ptr<WorkIterator>(new FilterIterator(&root)));
+    EXPECT_TRUE(walk(*iterators[0]).size() == 8 && walk(*iterators[1]).size() == 1) << "FilterIterator: used through WorkIterator like any other iterator";
 }
 
 // ============================================================================

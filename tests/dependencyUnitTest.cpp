@@ -4,15 +4,16 @@
 #include <string>
 
 #include "core/WorkflowInstance.h"
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/creation/FeatureDeliveryDirector.h"
-#include "patterns/creation/SmallTeamFactory.h"
-#include "patterns/creation/BusyTeamFactory.h"
-#include "patterns/creation/HighRiskFactory.h"
-#include "patterns/execution/AssignedToIterator.h"
-#include "patterns/execution/AwaitingApprovalIterator.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/Tividy.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "builder/FeatureDeliveryDirector.h"
+#include "abstract_factory/SmallTeamFactory.h"
+#include "abstract_factory/BusyTeamFactory.h"
+#include "abstract_factory/HighRiskFactory.h"
+#include "composite/LeafTask.h"
+#include "iterator/FilterIterator.h"
+#include "decorator/ApprovalWork.h"
+#include "decorator/BlockedWork.h"
+#include "mediator/TividyMediator.h"
 #include "server/DemoSeed.h"
 
 namespace {
@@ -23,8 +24,8 @@ bool throwsInvalid(F f) {
     return false;
 }
 
-LeafWorkItem* leaf(const WorkflowInstance& instance, const std::string& id) {
-    return dynamic_cast<LeafWorkItem*>(instance.item(id));
+LeafTask* leaf(const WorkflowInstance& instance, const std::string& id) {
+    return leafOf(instance.item(id));
 }
 
 WorkflowDefinition feature(const std::string& policy) {
@@ -34,7 +35,7 @@ WorkflowDefinition feature(const std::string& policy) {
     return builder.build();
 }
 
-void finish(LeafWorkItem* item, const std::string& who) {
+void finish(LeafTask* item, const std::string& who) {
     item->assign(who);
     item->start();
     item->complete();
@@ -53,10 +54,10 @@ TEST(StructuredWorkflow, Builder) {
     b.addStructuredStage(StageTemplate("a", "A"));
     EXPECT_THROW(([&] { b.addStructuredStage(StageTemplate("a", "Again")); })(), std::invalid_argument) << "Builder: duplicate stage ids are rejected";
     EXPECT_THROW(([&] { b.addStructuredStage(StageTemplate("x", "X", "missing")); })(), std::invalid_argument) << "Builder: unknown parent stages are rejected";
-    EXPECT_THROW(([&] { b.addStructuredItem("missing", ItemTemplate("i", "I", "")); })(), std::invalid_argument) << "Builder: items need a known stage";
-    b.addStructuredItem("a", ItemTemplate("one", "One", ""));
-    b.addStructuredItem("a", ItemTemplate("two", "Two", ""));
-    EXPECT_THROW(([&] { b.addStructuredItem("a", ItemTemplate("one", "Dup", "")); })(), std::invalid_argument) << "Builder: duplicate item ids are rejected";
+    EXPECT_THROW(([&] { b.addStructuredItem("missing", TaskTemplate("i", "I", "")); })(), std::invalid_argument) << "Builder: items need a known stage";
+    b.addStructuredItem("a", TaskTemplate("one", "One", ""));
+    b.addStructuredItem("a", TaskTemplate("two", "Two", ""));
+    EXPECT_THROW(([&] { b.addStructuredItem("a", TaskTemplate("one", "Dup", "")); })(), std::invalid_argument) << "Builder: duplicate item ids are rejected";
     EXPECT_THROW(([&] { b.addBlocker("one", "two"); })(), std::invalid_argument) << "Builder: an item cannot be blocked by a later item (no cycles)";
     EXPECT_THROW(([&] { b.addBlocker("two", "two"); })(), std::invalid_argument) << "Builder: an item cannot block itself";
     b.addBlocker("two", "one");
@@ -69,7 +70,7 @@ TEST(StructuredWorkflow, FactoryTree) {
     WorkflowInstance instance("p1", def, busy, "Dark mode");
     EXPECT_EQ(instance.name(), "Dark mode") << "Instance: the project title is used as its name";
     EXPECT_EQ(instance.root().childCount(), 4u) << "Instance: four top-level stages";
-    CompositeStage* build = dynamic_cast<CompositeStage*>(instance.find("build"));
+    CompositeTask* build = dynamic_cast<CompositeTask*>(instance.find("build"));
     EXPECT_TRUE(build != nullptr && build->childCount() == 2) << "Instance: the Build stage nests two sub-stages (Composite)";
     EXPECT_TRUE(build->mode().name() == "Parallel") << "Instance: stages come from the policy's factory";
     EXPECT_TRUE(leaf(instance, "api")->unit() == "backend") << "Instance: items keep their team";
@@ -88,29 +89,29 @@ TEST(StructuredWorkflow, Blocking) {
     WorkflowInstance instance("p1", def, busy, "");
     instance.start();
 
-    EXPECT_TRUE(leaf(instance, "spec")->status() == WorkItem::AVAILABLE) << "Blocking: the first stage opens";
-    EXPECT_TRUE(leaf(instance, "api")->status() == WorkItem::CREATED) << "Blocking: later stages stay closed";
+    EXPECT_TRUE(leaf(instance, "spec")->status() == LeafTask::AVAILABLE) << "Blocking: the first stage opens";
+    EXPECT_TRUE(leaf(instance, "api")->status() == LeafTask::CREATED) << "Blocking: later stages stay closed";
     finish(leaf(instance, "spec"), "Tom");
     instance.advance();
 
-    LeafWorkItem* ui = leaf(instance, "ui");
-    EXPECT_TRUE(leaf(instance, "api")->status() == WorkItem::AVAILABLE) << "Blocking: api opens with the Build stage";
-    EXPECT_TRUE(leaf(instance, "mockups")->status() == WorkItem::AVAILABLE) << "Blocking: parallel sub-stages open together";
-    EXPECT_TRUE(ui->isWaiting() && ui->status() == WorkItem::CREATED) << "Blocking: ui waits for its blockers";
+    LeafTask* ui = leaf(instance, "ui");
+    EXPECT_TRUE(leaf(instance, "api")->status() == LeafTask::AVAILABLE) << "Blocking: api opens with the Build stage";
+    EXPECT_TRUE(leaf(instance, "mockups")->status() == LeafTask::AVAILABLE) << "Blocking: parallel sub-stages open together";
+    EXPECT_TRUE(ui->isWaiting() && ui->status() == LeafTask::CREATED) << "Blocking: ui waits for its blockers";
     EXPECT_TRUE(ui->openBlockers().size() == 2) << "Blocking: ui is blocked by two unfinished items";
 
     finish(leaf(instance, "mockups"), "Dee");
     EXPECT_TRUE(ui->isWaiting() && ui->openBlockers().size() == 1) << "Blocking: one blocker done, ui still waits";
 
-    LeafWorkItem* api = leaf(instance, "api");
+    LeafTask* api = leaf(instance, "api");
     api->assign("Bob");
     api->start();
     api->complete();
     EXPECT_TRUE(ui->isWaiting()) << "Blocking: a blocker awaiting approval still blocks";
     api->approve();
-    EXPECT_TRUE(ui->status() == WorkItem::AVAILABLE && !ui->isWaiting()) << "Blocking: ui opens once every blocker is approved";
+    EXPECT_TRUE(ui->status() == LeafTask::AVAILABLE && !ui->isWaiting()) << "Blocking: ui opens once every blocker is approved";
 
-    EXPECT_THROW(([&] { ui->addBlocker("ui"); })(), std::invalid_argument) << "Blocking: an item cannot block itself";
+    EXPECT_THROW(([&] { ui->blocking()->addBlocker("ui"); })(), std::invalid_argument) << "Blocking: an item cannot block itself";
 }
 
 TEST(StructuredWorkflow, Sequential) {
@@ -120,9 +121,9 @@ TEST(StructuredWorkflow, Sequential) {
     instance.start();
     finish(leaf(instance, "spec"), "Tom");
     instance.advance();
-    EXPECT_TRUE(leaf(instance, "api")->status() == WorkItem::AVAILABLE) << "Sequential: the first item of the first sub-stage opens";
-    EXPECT_TRUE(leaf(instance, "migration")->status() == WorkItem::CREATED) << "Sequential: the next item waits its turn";
-    EXPECT_TRUE(leaf(instance, "mockups")->status() == WorkItem::CREATED) << "Sequential: the next sub-stage waits";
+    EXPECT_TRUE(leaf(instance, "api")->status() == LeafTask::AVAILABLE) << "Sequential: the first item of the first sub-stage opens";
+    EXPECT_TRUE(leaf(instance, "migration")->status() == LeafTask::CREATED) << "Sequential: the next item waits its turn";
+    EXPECT_TRUE(leaf(instance, "mockups")->status() == LeafTask::CREATED) << "Sequential: the next sub-stage waits";
 }
 
 TEST(StructuredWorkflow, Iterators) {
@@ -138,35 +139,35 @@ TEST(StructuredWorkflow, Iterators) {
     leaf(instance, "mockups")->assign("Dee");
     leaf(instance, "migration")->start();
     leaf(instance, "migration")->complete();
-    leaf(instance, "migration")->setPendingApprover("Reviewer");
+    leaf(instance, "migration")->approvals()->setPendingApprover("Reviewer");
 
     int bobs = 0;
-    AssignedToIterator mine(&instance.root(), "Bob");
+    FilterIterator mine(&instance.root(), TaskFilter::assignedTo("Bob"));
     for (mine.first(); !mine.isDone(); mine.next()) ++bobs;
     EXPECT_EQ(bobs, 2) << "AssignedTo: finds every open item assigned to Bob";
 
     int toms = 0;
-    AssignedToIterator done(&instance.root(), "Tom");
+    FilterIterator done(&instance.root(), TaskFilter::assignedTo("Tom"));
     for (done.first(); !done.isDone(); done.next()) ++toms;
     EXPECT_EQ(toms, 0) << "AssignedTo: skips finished work";
 
-    AwaitingApprovalIterator reviewer(&instance.root(), "Reviewer");
+    FilterIterator reviewer(&instance.root(), TaskFilter::awaitingApproval("Reviewer"));
     EXPECT_TRUE(!reviewer.isDone() && reviewer.currentItem()->id() == "migration") << "AwaitingApproval: finds work routed to a role";
     reviewer.next();
     EXPECT_TRUE(reviewer.isDone()) << "AwaitingApproval: stops after the last match";
 
-    AwaitingApprovalIterator other(&instance.root(), "TechLead");
+    FilterIterator other(&instance.root(), TaskFilter::awaitingApproval("TechLead"));
     EXPECT_TRUE(other.isDone()) << "AwaitingApproval: other roles see nothing";
 
-    AwaitingApprovalIterator self(&instance.root(), "Reviewer", "Bob");
+    FilterIterator self(&instance.root(), TaskFilter::awaitingApproval("Reviewer", "Bob"));
     EXPECT_TRUE(self.isDone()) << "AwaitingApproval: nobody is asked to approve their own work";
 
-    AwaitingApprovalIterator any = AwaitingApprovalIterator::anyApprover(&instance.root());
+    FilterIterator any(&instance.root(), TaskFilter::awaitingAnyApprover());
     EXPECT_FALSE(any.isDone()) << "AwaitingApproval: anyApprover() lists everything awaiting approval";
 }
 
 TEST(StructuredWorkflow, FacadeTasks) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
 
@@ -178,7 +179,7 @@ TEST(StructuredWorkflow, FacadeTasks) {
     EXPECT_TRUE(engine.instance(p).item("spec")->assignee() == "Tom") << "Facade: autoAssign() finds the TechLead in Engineering";
     engine.start(p, "spec");
     engine.complete(p, "spec");
-    LeafWorkItem* spec = dynamic_cast<LeafWorkItem*>(engine.instance(p).item("spec"));
+    LeafTask* spec = leafOf(engine.instance(p).item("spec"));
     EXPECT_TRUE(spec->pendingApprover() == "Manager") << "Chain: BusyTeam has no Manager handler, so it falls to a Manager";
     EXPECT_EQ(engine.approvalsFor("Maya").size(), 1u) << "Facade: the manager sees it under approvals";
     EXPECT_TRUE(engine.approvalsFor("Tom").empty()) << "Facade: the person who did the work does not";
@@ -190,7 +191,7 @@ TEST(StructuredWorkflow, FacadeTasks) {
     task.unit = "backend";
     task.blockedBy.push_back("api");
     std::string t = engine.addTask(p, task);
-    LeafWorkItem* added = dynamic_cast<LeafWorkItem*>(engine.instance(p).item(t));
+    LeafTask* added = leafOf(engine.instance(p).item(t));
     EXPECT_TRUE(added != nullptr && added->unit() == "backend") << "Facade: addTask() makes a task for the chosen team";
     EXPECT_TRUE(added->isWaiting() && added->assignee().empty()) << "Facade: a blocked task waits and is not assigned yet";
 
@@ -199,7 +200,7 @@ TEST(StructuredWorkflow, FacadeTasks) {
     EXPECT_TRUE(apiDev == "Bob" || apiDev == "Ben") << "Facade: api goes to a back-end developer";
     engine.start(p, "api");
     engine.complete(p, "api");
-    EXPECT_TRUE(dynamic_cast<LeafWorkItem*>(engine.instance(p).item("api"))->pendingApprover() == "Reviewer") << "Chain: api is routed to a Reviewer";
+    EXPECT_TRUE(leafOf(engine.instance(p).item("api"))->pendingApprover() == "Reviewer") << "Chain: api is routed to a Reviewer";
     EXPECT_TRUE(engine.canApprove("Rita", p, "api")) << "Facade: the Reviewer can approve it";
     engine.approve(p, "api");
     std::string taskDev = engine.instance(p).item(t)->assignee();
@@ -209,7 +210,7 @@ TEST(StructuredWorkflow, FacadeTasks) {
     EXPECT_TRUE(engine.organisation().find(taskDev)->load() == 1) << "Facade: loads follow the work trees";
     engine.undo();
     EXPECT_TRUE(engine.instance(p).item(t)->assignee().empty()) << "Facade: one undo rolls back the approval and the auto-assign it caused";
-    EXPECT_TRUE(engine.instance(p).item("api")->status() == WorkItem::AWAITING_APPROVAL) << "Facade: undo puts api back in review";
+    EXPECT_TRUE(engine.instance(p).item("api")->status() == LeafTask::AWAITING_APPROVAL) << "Facade: undo puts api back in review";
     EXPECT_TRUE(engine.organisation().find(apiDev)->load() == 1) << "Facade: undo puts loads back too";
     engine.redo();
     EXPECT_TRUE(engine.instance(p).item(t)->assignee() == taskDev) << "Facade: redo reapplies it";
@@ -225,7 +226,7 @@ TEST(StructuredWorkflow, FacadeTasks) {
     EXPECT_THROW(([&] { engine.addTask(p, badUnit); })(), std::invalid_argument) << "Facade: unknown teams are rejected";
 
     std::string small = engine.startProject("Feature Delivery", "Small", "SmallTeam");
-    LeafWorkItem* deploy = dynamic_cast<LeafWorkItem*>(engine.instance(small).item("deploy"));
+    LeafTask* deploy = leafOf(engine.instance(small).item("deploy"));
     EXPECT_TRUE(deploy->approverRole() == "Auto") << "Facade: deploy asks for automatic approval";
     std::string high = engine.startProject("Feature Delivery", "High", "HighRisk");
     EXPECT_EQ(engine.policyOf(high), "HighRisk") << "Facade: several policies run side by side";

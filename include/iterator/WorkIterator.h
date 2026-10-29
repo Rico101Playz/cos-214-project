@@ -1,7 +1,7 @@
 #ifndef WORKITERATOR_H
 #define WORKITERATOR_H
 
-class WorkNode;
+class Task;
 
 // ITERATOR pattern - the ITERATOR interface.
 //
@@ -22,7 +22,7 @@ public:
     // True when every node has been visited.
     virtual bool isDone() const = 0;
     // The node at the current position; nullptr once the walk is done.
-    virtual WorkNode* currentItem() const = 0;
+    virtual Task* currentItem() const = 0;
 };
 
 #endif // WORKITERATOR_H
