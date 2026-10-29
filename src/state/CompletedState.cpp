@@ -1,3 +1,3 @@
-#include "patterns/execution/CompletedState.h"
+#include "state/CompletedState.h"
 
 std::string CompletedState::name() const { return "Completed"; }

@@ -9,26 +9,26 @@
 // delivery
 // |-- build:   implement, test
 // `-- release: review, deploy(prod)
-static void buildTree(CompositeStage& root) {
-    CompositeStage* build = addSubStage(root, "build");
+static void buildTree(CompositeTask& root) {
+    CompositeTask* build = addSubStage(root, "build");
     addLeaf(*build, "implement", "Developer");
     addLeaf(*build, "test", "QA");
 
-    CompositeStage* release = addSubStage(root, "release");
+    CompositeTask* release = addSubStage(root, "release");
     addLeaf(*release, "review", "Reviewer");
-    CompositeStage* deploy = addSubStage(*release, "deploy");
+    CompositeTask* deploy = addSubStage(*release, "deploy");
     addLeaf(*deploy, "prod", "ReleaseManager");
 }
 
-static WorkItem* itemAt(CompositeStage& root, const std::string& id) {
-    return static_cast<WorkItem*>(root.find(id));
+static LeafTask* itemAt(CompositeTask& root, const std::string& id) {
+    return static_cast<LeafTask*>(root.find(id));
 }
 
 TEST(CompositeTree, BuildingTheTree) {
-    CompositeStage stage("s", "Stage");
-    LeafWorkItem* leaf = new LeafWorkItem("l1", "Leaf", "Developer");
+    CompositeTask stage("s", "Stage");
+    LeafTask* leaf = new LeafTask("l1", "Leaf", "Developer");
 
-    WorkNode& added = stage.add(std::unique_ptr<WorkNode>(leaf));
+    Task& added = stage.add(std::unique_ptr<Task>(leaf));
     EXPECT_EQ(&added, leaf) << "add: returns the node that was added";
     EXPECT_TRUE(stage.childCount() == 1 && stage.child(0) == leaf) << "add: the child is reachable by index";
     EXPECT_TRUE(leaf->parent() == &stage) << "add: the child's parent is the stage";
@@ -36,15 +36,15 @@ TEST(CompositeTree, BuildingTheTree) {
 
     addLeaf(stage, "l2");
     EXPECT_TRUE(stage.childCount() == 2 && stage.child(1)->id() == "l2") << "add: children keep their definition order";
-    EXPECT_THROW(([&]{ stage.add(std::unique_ptr<WorkNode>()); })(), std::invalid_argument) << "add: a null child throws";
+    EXPECT_THROW(([&]{ stage.add(std::unique_ptr<Task>()); })(), std::invalid_argument) << "add: a null child throws";
 
     EXPECT_TRUE(leaf->childCount() == 0 && leaf->child(0) == nullptr) << "Leaf: has no children";
 }
 
 TEST(CompositeTree, RemovingChildren) {
-    CompositeStage root("delivery", "Delivery");
+    CompositeTask root("delivery", "Delivery");
     buildTree(root);
-    CompositeStage* build = static_cast<CompositeStage*>(root.find("build"));
+    CompositeTask* build = static_cast<CompositeTask*>(root.find("build"));
 
     EXPECT_TRUE(build->remove("test") == true) << "remove: removing a direct child succeeds";
     EXPECT_TRUE(build->childCount() == 1 && root.find("test") == nullptr) << "remove: the child is gone from the tree";
@@ -53,16 +53,16 @@ TEST(CompositeTree, RemovingChildren) {
     EXPECT_FALSE(root.remove("prod")) << "remove: only direct children can be removed";
     EXPECT_NE(root.find("prod"), nullptr) << "remove: a refused removal changes nothing";
 
-    CompositeStage* release = static_cast<CompositeStage*>(root.find("release"));
+    CompositeTask* release = static_cast<CompositeTask*>(root.find("release"));
     EXPECT_TRUE(release->remove("deploy") == true) << "remove: a sub-stage can be removed";
     EXPECT_EQ(root.find("prod"), nullptr) << "remove: removing a stage removes its whole subtree";
 }
 
 TEST(CompositeTree, CompletionAndProgress) {
-    CompositeStage empty("e", "Empty");
+    CompositeTask empty("e", "Empty");
     EXPECT_TRUE(empty.isComplete() && nearly(empty.progress(), 1.0)) << "Progress: an empty stage is complete";
 
-    CompositeStage root("delivery", "Delivery");
+    CompositeTask root("delivery", "Delivery");
     buildTree(root);
     EXPECT_TRUE(!root.isComplete() && nearly(root.progress(), 0.0)) << "Progress: a fresh tree is 0%";
 
@@ -80,10 +80,10 @@ TEST(CompositeTree, CompletionAndProgress) {
 }
 
 TEST(CompositeTree, UniformInterface) {
-    CompositeStage root("delivery", "Delivery");
+    CompositeTask root("delivery", "Delivery");
     buildTree(root);
 
-    std::vector<WorkNode*> nodes;
+    std::vector<Task*> nodes;
     nodes.push_back(&root);
     nodes.push_back(root.find("build"));
     nodes.push_back(root.find("implement"));
@@ -95,12 +95,12 @@ TEST(CompositeTree, UniformInterface) {
     EXPECT_TRUE(allIncomplete) << "Uniform: root, stage and leaf all answer isComplete()/progress() the same way";
 
     finishItem(*itemAt(root, "implement"));
-    EXPECT_TRUE(nodes[2]->isComplete() && nearly(nodes[2]->progress(), 1.0)) << "Uniform: the leaf reports done through WorkNode*";
+    EXPECT_TRUE(nodes[2]->isComplete() && nearly(nodes[2]->progress(), 1.0)) << "Uniform: the leaf reports done through Task*";
 }
 
 TEST(CompositeTree, IsReady) {
-    CompositeStage stage("s", "Stage");
-    LeafWorkItem* leaf = addLeaf(stage, "l");
+    CompositeTask stage("s", "Stage");
+    LeafTask* leaf = addLeaf(stage, "l");
     EXPECT_FALSE(stage.isReady()) << "Ready: a stage is never ready";
     EXPECT_TRUE(!leaf->isReady()) << "Ready: a Created leaf is not ready";
     leaf->makeAvailable();
@@ -109,7 +109,7 @@ TEST(CompositeTree, IsReady) {
 }
 
 TEST(CompositeTree, CancelCascade) {
-    CompositeStage root("delivery", "Delivery");
+    CompositeTask root("delivery", "Delivery");
     buildTree(root);
     finishItem(*itemAt(root, "implement"));
 
@@ -122,13 +122,13 @@ TEST(CompositeTree, CancelCascade) {
 }
 
 TEST(CompositeTree, Find) {
-    CompositeStage root("delivery", "Delivery");
+    CompositeTask root("delivery", "Delivery");
     buildTree(root);
 
     EXPECT_EQ(root.find("delivery"), &root) << "Find: a node finds itself";
-    WorkNode* prod = root.find("prod");
+    Task* prod = root.find("prod");
     EXPECT_TRUE(prod != nullptr && prod->id() == "prod") << "Find: reaches a deeply nested node";
-    EXPECT_TRUE(dynamic_cast<LeafWorkItem*>(prod) != nullptr) << "Find: the node found is the real LeafWorkItem";
+    EXPECT_TRUE(leafOf(prod) != nullptr) << "Find: the node found is the real LeafTask";
     EXPECT_EQ(root.find("nope"), nullptr) << "Find: unknown id gives nullptr";
     EXPECT_TRUE(root.find("deploy")->childCount() == 1) << "Find: a found stage exposes its children";
     EXPECT_TRUE(root.find("release")->find("implement") == nullptr) << "Find: only searches below the node it is called on";
@@ -136,8 +136,8 @@ TEST(CompositeTree, Find) {
 
 TEST(CompositeTree, LeafMatchesPlainWorkItem) {
     // Rejected -> start (rework) is a State-pattern extension, so it is not compared here.
-    WorkItem plain("p", "Plain", "Developer");
-    LeafWorkItem leaf("l", "Leaf", "Developer");
+    LeafTask plain("p", "Plain", "Developer");
+    LeafTask leaf("l", "Leaf", "Developer");
 
     EXPECT_EQ(plain.status(), leaf.status()) << "Drop-in: same starting status";
     EXPECT_TRUE(throwsLogicError([&]{ plain.start(); }) && throwsLogicError([&]{ leaf.start(); })) << "Drop-in: both refuse start() while Created";
@@ -161,10 +161,10 @@ TEST(CompositeTree, LeafMatchesPlainWorkItem) {
 }
 
 TEST(CompositeTree, MixedChildren) {
-    CompositeStage stage("s", "Mixed");
-    WorkItem* plain = new WorkItem("plain", "Plain", "Developer");
-    stage.add(std::unique_ptr<WorkNode>(plain));
-    LeafWorkItem* leaf = addLeaf(stage, "leaf");
+    CompositeTask stage("s", "Mixed");
+    LeafTask* plain = new LeafTask("plain", "Plain", "Developer");
+    stage.add(std::unique_ptr<Task>(plain));
+    LeafTask* leaf = addLeaf(stage, "leaf");
 
     finishItem(*plain);
     EXPECT_TRUE(nearly(stage.progress(), 0.5)) << "Mixed: progress averages both kinds of child";

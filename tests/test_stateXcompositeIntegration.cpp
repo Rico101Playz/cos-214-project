@@ -6,17 +6,17 @@
 #include "state_test_helpers.h"
 
 #include "core/WorkflowInstance.h"
-#include "patterns/execution/SequentialMode.h"
-#include "patterns/execution/ReadyOnlyIterator.h"
+#include "strategy/SequentialMode.h"
+#include "iterator/FilterIterator.h"
 
 // Feature Delivery:
 //   Build   (parallel):   implement, test
 //   Release (sequential): review, then deploy { prod }
 static void buildDelivery(WorkflowInstance& inst) {
-    CompositeStage* release = static_cast<CompositeStage*>(inst.find("Release"));
+    CompositeTask* release = static_cast<CompositeTask*>(inst.find("Release"));
     release->setMode(std::unique_ptr<StageMode>(new SequentialMode()));
     addLeaf(*release, "review", "Reviewer");
-    CompositeStage* deploy = addSubStage(*release, "deploy");
+    CompositeTask* deploy = addSubStage(*release, "deploy");
     addLeaf(*deploy, "prod", "ReleaseManager");
 }
 
@@ -26,7 +26,7 @@ static WorkflowDefinition deliveryDefinition() {
 
 // Ids of everything that is Available right now, found by walking the live tree.
 static std::string ready(WorkflowInstance& inst) {
-    ReadyOnlyIterator it(&inst.root());
+    FilterIterator it(&inst.root());
     return walkIds(it);
 }
 
@@ -44,7 +44,7 @@ TEST(StateCompositeIntegration, FullDeliveryScenario) {
     EXPECT_THROW(([&]{ inst.item("prod")->assign("x"); })(), std::logic_error) << "Scenario: a locked item cannot be assigned";
 
     // ---- 'implement': reject, rework, approve ----
-    WorkItem* implement = inst.item("implement");
+    LeafTask* implement = inst.item("implement");
     implement->assign("alice");
     implement->start();
     implement->complete();
@@ -63,7 +63,7 @@ TEST(StateCompositeIntegration, FullDeliveryScenario) {
     EXPECT_TRUE(implement->status() == "Completed" && nearly(inst.find("Build")->progress(), 0.5)) << "Scenario: rework approved, Build is 50%";
 
     // ---- 'test': escalate, reassign, finish ----
-    LeafWorkItem* test = static_cast<LeafWorkItem*>(inst.item("test"));
+    LeafTask* test = static_cast<LeafTask*>(inst.item("test"));
     test->assign("carol");
     test->escalate();
     EXPECT_TRUE(test->status() == "Escalated" && ready(inst).empty()) << "Scenario: an escalated item is not ready for anyone";
@@ -93,7 +93,7 @@ TEST(StateCompositeIntegration, FullDeliveryScenario) {
     // ---- finish ----
     finishItem(*inst.item("prod"));
     EXPECT_TRUE(inst.root().isComplete() && nearly(inst.root().progress(), 1.0)) << "Scenario: the whole tree reports done";
-    EXPECT_EQ(inst.state(), WorkflowInstance::RUNNING) << "Scenario: the instance is Running until advance()";
+    EXPECT_EQ(inst.state(), WorkflowInstance::COMPLETED) << "Scenario: the project is Completed once its last task is";
     inst.advance();
     EXPECT_EQ(inst.state(), WorkflowInstance::COMPLETED) << "Scenario: advance() -> Completed";
     EXPECT_TRUE(ready(inst).empty()) << "Scenario: nothing is left to pick up";

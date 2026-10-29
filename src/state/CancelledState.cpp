@@ -1,3 +1,3 @@
-#include "patterns/execution/CancelledState.h"
+#include "state/CancelledState.h"
 
 std::string CancelledState::name() const { return "Cancelled"; }
