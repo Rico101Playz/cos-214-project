@@ -6,13 +6,12 @@
 #include <memory>
 
 #include "core/WorkflowDefinition.h"
-#include "core/WorkItem.h"
-#include "patterns/execution/InstanceState.h"
-#include "patterns/execution/Memento.h"
-#include "patterns/structural/CompositeStage.h"
+#include "composite/LeafTask.h"
+#include "memento/Memento.h"
+#include "composite/CompositeTask.h"
 
 class WorkflowFactory;
-class LeafWorkItem;
+class LeafTask;
 
 class WorkflowInstance {
 public:
@@ -32,30 +31,36 @@ public:
     // ---- accessors ----
     const std::string& id() const;
     const std::string& title() const;
-    const std::string& state() const;
+    // Created until start(), Cancelled once cancelled; when every task is
+    // complete, AwaitingSignOff if the project needs sign-off and has not had
+    // it, Completed otherwise; Running in between.
+    std::string state() const;
     const std::string& reason() const;
     const WorkflowDefinition& definition() const;
     const std::string& name() const;
     std::size_t currentStageIndex() const;
-    bool adoptItem(const std::string& stageId, std::unique_ptr<LeafWorkItem> item);
-    bool isActive(const WorkNode* node) const;
-    std::size_t topLevelIndex(const WorkNode* node) const;
+    bool adoptItem(const std::string& stageId, std::unique_ptr<Task> item);
+    bool isActive(const Task* node) const;
+    std::size_t topLevelIndex(const Task* node) const;
 
     bool requiresSignOff() const;
     void setRequiresSignOff(bool required);
     void signOff();
-    CompositeStage& reopenForFixes(const WorkflowFactory& factory);
+    CompositeTask& reopenForFixes(const WorkflowFactory& factory);
 
     void rebuild(const WorkflowDefinition& definition, const std::string& name,
-                 std::unique_ptr<CompositeStage> root, const std::string& state,
+                 std::unique_ptr<CompositeTask> root, const std::string& state,
                  std::size_t stageIndex, const std::string& reason, bool signOffRequired);
 
-    CompositeStage& root() const;
-    WorkNode* currentStage() const;
-    WorkNode* find(const std::string& nodeId) const;
-    WorkItem* item(const std::string& itemId) const;
+    CompositeTask& root() const;
+    Task* currentStage() const;
+    Task* find(const std::string& nodeId) const;
+    LeafTask* item(const std::string& itemId) const;
 
-    // ---- lifecycle (delegated to instanceState_) ----
+    // ---- lifecycle ----
+    // start(), cancel(), signOff() and reopening throw std::logic_error when the
+    // project's status does not allow them; advance() does nothing unless it
+    // is under way.
     void start();
     void advance();
     void cancel(const std::string& reason);
@@ -69,27 +74,28 @@ public:
     bool approveItem (const std::string& itemId, bool approved, const std::string& comment);
     bool rejectItem  (const std::string& itemId, const std::string& reason);
     bool addWorkItem (const std::string& stageId, const std::string& itemId,
-                      std::shared_ptr<WorkItem> itemTemplate);
+                      std::shared_ptr<LeafTask> itemTemplate);
 
     // ---- memento ----
-    std::shared_ptr<InstanceMemento> createMemento(const std::string& label) const;
-    void restoreFromMemento(InstanceMemento* memento);
+    std::shared_ptr<Memento> createMemento(const std::string& label) const;
+    void restoreFromMemento(Memento* memento);
 
-    // ---- used by InstanceState subclasses ----
-    void setState(std::unique_ptr<InstanceState> next);
     void setReason(const std::string& reason);
+    // Sets the started, cancelled and signed-off flags that give this status.
+    void setStatus(const std::string& state);
     void openFirstStage();
     bool stagesFinished();
 
-    void activateStage(WorkNode* node);
-    void release(WorkNode* stage);
+    void activateStage(Task* node);
+    void release(Task* stage);
 
 private:
     std::string id_;
     WorkflowDefinition definition_;
-    std::unique_ptr<CompositeStage> root_;
-    std::unique_ptr<InstanceState> instanceState_;
-    std::string state_;
+    std::unique_ptr<CompositeTask> root_;
+    bool started_;
+    bool cancelled_;
+    bool signedOff_;
     std::string reason_;
     std::size_t currentStage_;
     std::string name_;

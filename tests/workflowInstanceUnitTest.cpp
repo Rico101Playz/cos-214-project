@@ -6,12 +6,12 @@
 
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
-#include "core/WorkItem.h"
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/creation/FeatureDeliveryProcess.h"
+#include "composite/LeafTask.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "builder/OutlineDirector.h"
 
 // Takes an item from Available all the way to Completed.
-static void finish(WorkItem* item) {
+static void finish(LeafTask* item) {
     item->assign("Alice");
     item->start();
     item->complete();
@@ -20,8 +20,8 @@ static void finish(WorkItem* item) {
 
 static WorkflowDefinition featureDeliveryDefinition() {
     ConcreteDefinitionBuilder builder;
-    FeatureDeliveryProcess process;
-    process.construct(&builder);
+    OutlineDirector process("Feature Delivery Outline", &builder);
+    process.construct();
     return builder.build();
 }
 
@@ -63,14 +63,14 @@ TEST(WorkflowInstance, Run) {
     WorkflowInstance instance("instance-1", definition);
 
     // Put a second item in Release so that stage has work of its own.
-    CompositeStage* release = static_cast<CompositeStage*>(instance.find("Release"));
-    release->add(std::unique_ptr<WorkNode>(new WorkItem("Deploy", "Deploy", "ReleaseManager")));
+    CompositeTask* release = static_cast<CompositeTask*>(instance.find("Release"));
+    release->add(std::unique_ptr<Task>(new LeafTask("Deploy", "Deploy", "ReleaseManager")));
 
     instance.start();
     EXPECT_EQ(instance.state(), WorkflowInstance::RUNNING) << "WorkflowInstance: start() makes it Running";
     EXPECT_EQ(instance.currentStage(), instance.find("Build")) << "WorkflowInstance: the first stage runs first";
     EXPECT_TRUE(instance.item("Implement")->isReady() && instance.item("Test")->isReady()) << "WorkflowInstance: start() releases the first stage's items";
-    EXPECT_TRUE(instance.item("Deploy")->status() == WorkItem::CREATED) << "WorkflowInstance: later stages are held back";
+    EXPECT_TRUE(instance.item("Deploy")->status() == LeafTask::CREATED) << "WorkflowInstance: later stages are held back";
 
     bool threw = false;
     try {
@@ -131,8 +131,8 @@ TEST(WorkflowInstance, Edges) {
     cancelled.cancel("Feature dropped");
     EXPECT_EQ(cancelled.state(), WorkflowInstance::CANCELLED) << "WorkflowInstance: cancel() makes it Cancelled";
     EXPECT_EQ(cancelled.reason(), "Feature dropped") << "WorkflowInstance: cancel() records the reason";
-    EXPECT_TRUE(cancelled.item("Task A")->status() == WorkItem::CANCELLED &&
-          cancelled.item("Task B")->status() == WorkItem::CANCELLED) << "WorkflowInstance: cancel() cancels all unfinished work";
+    EXPECT_TRUE(cancelled.item("Task A")->status() == LeafTask::CANCELLED &&
+          cancelled.item("Task B")->status() == LeafTask::CANCELLED) << "WorkflowInstance: cancel() cancels all unfinished work";
     cancelled.advance();
     EXPECT_EQ(cancelled.state(), WorkflowInstance::CANCELLED) << "WorkflowInstance: advance() does nothing once cancelled";
 }
