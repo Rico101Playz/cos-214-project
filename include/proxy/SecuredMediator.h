@@ -1,30 +1,25 @@
-#ifndef SECUREDTIVIDY_H
-#define SECUREDTIVIDY_H
+#ifndef SECURED_MEDIATOR_H
+#define SECURED_MEDIATOR_H
 
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "patterns/structural/TividyService.h"
+#include "mediator/Mediator.h"
 
-class Tividy;
-class LeafWorkItem;
+class TividyMediator;
+class LeafTask;
 
-class AccessDenied : public std::runtime_error {
-public:
-    explicit AccessDenied(const std::string& message) : std::runtime_error(message) {}
-};
-
-class SecuredTividy : public TividyService {
+class SecuredMediator : public Mediator {
 private:
-    Tividy& real_;
+    TividyMediator& real_;
     std::string actor_;
 
-    LeafWorkItem* leaf(const std::string& instanceId, const std::string& itemId) const;
+    LeafTask* leaf(const std::string& instanceId, const std::string& itemId) const;
     void requireManager(const std::string& action) const;
     void require(bool allowed, const std::string& action) const;
 
 public:
-    SecuredTividy(Tividy& real, const std::string& actor);
+    SecuredMediator(TividyMediator& real, const std::string& actor);
 
     const std::string& actor() const;
     bool isManager() const;
@@ -63,6 +58,10 @@ public:
     std::vector<std::string> flagIssue(const std::string& instanceId, const IssueSpec& spec) override;
     void undo() override;
     void redo() override;
+    // Reading the engine's state is open to everyone; putting an earlier state
+    // back is for managers, who may also undo anyone's step.
+    std::shared_ptr<const EngineMemento> createMemento(const std::string& label) const override;
+    void restoreMemento(const EngineMemento& memento) override;
     void addUnit(const std::string& parentId, const std::string& id,
                  const std::string& name) override;
     void addPerson(const std::string& name, const std::string& role,
