@@ -1,31 +1,27 @@
-#ifndef TIVIDY_H
-#define TIVIDY_H
+#ifndef TIVIDY_MEDIATOR_H
+#define TIVIDY_MEDIATOR_H
 
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include "core/Company.h"
+#include "org_composite/Company.h"
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
-#include "patterns/creation/WorkflowFactory.h"
-#include "patterns/execution/AssignmentService.h"
-#include "patterns/execution/CommandInvoker.h"
-#include "patterns/execution/EngineMemento.h"
-#include "patterns/execution/UndoHistory.h"
-#include "patterns/execution/Memento.h"
-#include "patterns/execution/EventBus.h"
-#include "patterns/structural/TividyService.h"
+#include "abstract_factory/WorkflowFactory.h"
+#include "strategy/AssignmentService.h"
+#include "command/CommandInvoker.h"
+#include "memento/EngineMemento.h"
+#include "command/UndoHistory.h"
+#include "memento/Memento.h"
+#include "observer/EventBus.h"
+#include "mediator/Mediator.h"
+#include "facade/HistoryFacade.h"
+#include "facade/OrgFacade.h"
+#include "facade/ProjectFacade.h"
 
-class LeafWorkItem;
+class LeafTask;
 
-struct ItemRef {
-    std::string instanceId;
-    std::string itemId;
-
-    ItemRef(const std::string& instance, const std::string& item)
-        : instanceId(instance), itemId(item) {}
-};
 
 // FACADE pattern - the FACADE.
 //
@@ -38,66 +34,51 @@ struct ItemRef {
 // participant) throws std::invalid_argument; a call the item's or instance's
 // current state does not allow throws std::logic_error. Nothing changes when
 // a call throws.
-class Tividy : public TividyService {
+class TividyMediator : public Mediator {
 public:
     class ActorScope {
     private:
-        Tividy& engine_;
+        TividyMediator& engine_;
         std::string previous_;
 
     public:
-        ActorScope(Tividy& engine, const std::string& actor);
+        ActorScope(TividyMediator& engine, const std::string& actor);
         ~ActorScope();
     };
 
 private:
-    struct Runtime {
-        std::unique_ptr<WorkflowFactory> factory;
-        std::unique_ptr<AssignmentService> assignment;
-        std::unique_ptr<ApprovalHandler> approvals;
-        bool structured;
-    };
+    typedef ProjectFacade::Runtime Runtime;
 
     class Step {
     private:
-        Tividy& engine_;
+        TividyMediator& engine_;
         bool outer_;
         bool committed_;
         std::string before_;
         std::string label_;
 
     public:
-        Step(Tividy& engine, const std::string& label);
+        Step(TividyMediator& engine, const std::string& label);
         ~Step();
         void commit();
     };
 
-    Company organisation_;
-    std::map<std::string, WorkflowDefinition> definitions_;
-    std::map<std::string, std::unique_ptr<WorkflowInstance> > instances_;
-    std::map<std::string, std::unique_ptr<Runtime> > runtimes_;
-    std::vector<std::string> instanceOrder_;
-    CommandInvoker invoker_;
+    ProjectFacade projectFacade_;
+    OrgFacade orgFacade_;
+    HistoryFacade historyFacade_;
+    CommandInvoker invoker_;        // runs every change as a command; HistoryFacade keeps the CommandHistory
     EventBus bus_;
-    EventBus historyBus_;
-    std::unique_ptr<UndoHistory> ownHistory_;
-    UndoHistory* history_;
-    int nextInstance_;
-    int nextTask_;
     int depth_;
     std::string actor_;
     mutable std::vector<WorkflowEvent> pendingEvents_;
 
 
-    void record(const std::string& instanceId, WorkCommand* command);
+    // Runs the Request as a RequestCommand bound to ProjectFacade and returns its answer.
+    Response record(const Request& request);
 
-    WorkflowInstance& findInstance(const std::string& instanceId) const;
-    WorkItem& findItem(const std::string& instanceId, const std::string& itemId) const;
-    LeafWorkItem& findLeaf(const std::string& instanceId, const std::string& itemId) const;
-    Participant& findParticipant(const std::string& name) const;
-    Runtime& runtime(const std::string& instanceId) const;
+    // ownerRole: the role the owner approves as, or "" when the company has none.
     std::unique_ptr<Runtime> makeRuntime(const std::string& policy, bool structured,
-                                         const Organisation& people);
+                                         const std::string& ownerRole);
     void publish(const std::string& type, const std::string& instanceId,
                  const std::string& itemId = "", const std::string& detail = "") const;
     void recomputeLoads();
@@ -107,18 +88,16 @@ private:
     void assignPending(const std::string& instanceId);
     void assignThroughPipeline(const std::string& instanceId, const std::string& itemId,
                                const std::string& requested, bool mustSucceed);
-    std::string nextTaskId(const WorkflowInstance& instance);
-    bool dependsOn(const LeafWorkItem& from, const LeafWorkItem& target) const;
     std::string launch(const WorkflowDefinition& definition, const std::string& title,
                        const std::string& policy, SignOffRule signOff);
     std::string label(const std::string& verb, const std::string& instanceId,
                       const std::string& itemId = "") const;
 
 public:
-    explicit Tividy(const std::string& organisationName);
+    explicit TividyMediator(const std::string& organisationName);
 
-    Tividy(const Tividy&) = delete;
-    Tividy& operator=(const Tividy&) = delete;
+    TividyMediator(const TividyMediator&) = delete;
+    TividyMediator& operator=(const TividyMediator&) = delete;
 
     // The people who can be assigned work.
     Company& organisation();
@@ -180,8 +159,11 @@ public:
     UndoHistory* history() const;
     void useHistory(UndoHistory* history);
 
-    std::shared_ptr<const EngineMemento> createMemento(const std::string& label) const;
-    void restoreMemento(const EngineMemento& memento);
+    std::shared_ptr<const EngineMemento> createMemento(const std::string& label) const override;
+    void restoreMemento(const EngineMemento& memento) override;
+    // ProjectFacade reports a change; when it moved work on or off someone's
+    // desk ("loads"), the people's loads are worked out again.
+    void notify(Colleague* sender, const Response& change) override;
 
     void addUnit(const std::string& parentId, const std::string& id,
                  const std::string& name) override;
@@ -215,4 +197,4 @@ public:
     EventBus& historyBus();
 };
 
-#endif // TIVIDY_H
+#endif // TIVIDY_MEDIATOR_H
