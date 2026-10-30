@@ -3,8 +3,8 @@
 #include <string>
 
 
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/creation/FeatureDeliveryProcess.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "builder/OutlineDirector.h"
 #include "core/WorkflowDefinition.h"
 
 // ============================================================================
@@ -17,7 +17,7 @@ TEST(Builder, ConcreteDefinitionBuilder) {
     builder.reset("Test Workflow");
     builder.addStage("Stage A");
     builder.addStage("Stage B");
-    builder.addWorkItem(ItemTemplate("Item 1"));
+    builder.addWorkItem(TaskTemplate("Item 1"));
     builder.addDependency("Stage A", "Stage B");
     
     WorkflowDefinition def = builder.build();
@@ -32,12 +32,12 @@ TEST(Builder, ConcreteDefinitionBuilder) {
 // ============================================================================
 // TEST: Director & Client Mechanics
 // ============================================================================
-TEST(Builder, FeatureDeliveryProcess) {
+TEST(Builder, FeatureDeliveryOutline) {
     
     ConcreteDefinitionBuilder builder;
-    FeatureDeliveryProcess process;
+    OutlineDirector process("Feature Delivery Outline", &builder);
     
-    process.construct(&builder);
+    process.construct();
     
     WorkflowDefinition def = builder.build();
     

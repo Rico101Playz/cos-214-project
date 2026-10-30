@@ -5,10 +5,10 @@
 
 #include "state_test_helpers.h"
 
-#include "patterns/execution/SequentialMode.h"
-#include "patterns/execution/ParallelMode.h"
+#include "strategy/SequentialMode.h"
+#include "strategy/ParallelMode.h"
 
-static void useSequential(CompositeStage& stage) {
+static void useSequential(CompositeTask& stage) {
     stage.setMode(std::unique_ptr<StageMode>(new SequentialMode()));
 }
 
@@ -16,19 +16,19 @@ TEST(StageMode, ModeNames) {
     EXPECT_EQ(SequentialMode().name(), "Sequential") << "SequentialMode: name()";
     EXPECT_EQ(ParallelMode().name(), "Parallel") << "ParallelMode: name()";
 
-    CompositeStage stage("s", "Stage");
-    EXPECT_EQ(stage.mode().name(), "Parallel") << "CompositeStage: defaults to Parallel";
+    CompositeTask stage("s", "Stage");
+    EXPECT_EQ(stage.mode().name(), "Parallel") << "CompositeTask: defaults to Parallel";
     useSequential(stage);
-    EXPECT_EQ(stage.mode().name(), "Sequential") << "CompositeStage: setMode() switches the mode";
+    EXPECT_EQ(stage.mode().name(), "Sequential") << "CompositeTask: setMode() switches the mode";
     stage.setMode(std::unique_ptr<StageMode>());
-    EXPECT_EQ(stage.mode().name(), "Parallel") << "CompositeStage: clearing the mode falls back to Parallel";
+    EXPECT_EQ(stage.mode().name(), "Parallel") << "CompositeTask: clearing the mode falls back to Parallel";
 }
 
 TEST(StageMode, ParallelMode) {
-    CompositeStage stage("s", "Stage");
-    LeafWorkItem* a = addLeaf(stage, "a");
-    LeafWorkItem* b = addLeaf(stage, "b");
-    LeafWorkItem* c = addLeaf(stage, "c");
+    CompositeTask stage("s", "Stage");
+    LeafTask* a = addLeaf(stage, "a");
+    LeafTask* b = addLeaf(stage, "b");
+    LeafTask* c = addLeaf(stage, "c");
 
     stage.activate();
     EXPECT_TRUE(a->status() == "Available" && b->status() == "Available" && c->status() == "Available") << "Parallel: activate() releases every child at once";
@@ -42,11 +42,11 @@ TEST(StageMode, ParallelMode) {
 }
 
 TEST(StageMode, SequentialMode) {
-    CompositeStage stage("s", "Stage");
+    CompositeTask stage("s", "Stage");
     useSequential(stage);
-    LeafWorkItem* a = addLeaf(stage, "a");
-    LeafWorkItem* b = addLeaf(stage, "b");
-    LeafWorkItem* c = addLeaf(stage, "c");
+    LeafTask* a = addLeaf(stage, "a");
+    LeafTask* b = addLeaf(stage, "b");
+    LeafTask* c = addLeaf(stage, "c");
 
     stage.activate();
     EXPECT_TRUE(a->status() == "Available") << "Sequential: activate() releases the first child";
@@ -63,10 +63,10 @@ TEST(StageMode, SequentialMode) {
 }
 
 TEST(StageMode, SequentialWaitsForApproval) {
-    CompositeStage stage("s", "Stage");
+    CompositeTask stage("s", "Stage");
     useSequential(stage);
-    LeafWorkItem* a = addLeaf(stage, "a");
-    LeafWorkItem* b = addLeaf(stage, "b");
+    LeafTask* a = addLeaf(stage, "a");
+    LeafTask* b = addLeaf(stage, "b");
     stage.activate();
 
     a->assign("alice"); a->start(); a->complete();
@@ -81,12 +81,12 @@ TEST(StageMode, SequentialWaitsForApproval) {
 
 TEST(StageMode, NestedStages) {
     // Sequential outer stage: sub-stage first, then a plain item.
-    CompositeStage outer("outer", "Outer");
+    CompositeTask outer("outer", "Outer");
     useSequential(outer);
-    CompositeStage* sub = addSubStage(outer, "sub");
-    LeafWorkItem* x = addLeaf(*sub, "x");
-    LeafWorkItem* y = addLeaf(*sub, "y");
-    LeafWorkItem* last = addLeaf(outer, "last");
+    CompositeTask* sub = addSubStage(outer, "sub");
+    LeafTask* x = addLeaf(*sub, "x");
+    LeafTask* y = addLeaf(*sub, "y");
+    LeafTask* last = addLeaf(outer, "last");
 
     outer.activate();
     EXPECT_TRUE(x->status() == "Available" && y->status() == "Available") << "Nested: the first child stage is activated through its own mode";
@@ -100,12 +100,12 @@ TEST(StageMode, NestedStages) {
     EXPECT_TRUE(outer.isComplete()) << "Nested: the outer stage completes";
 
     // Parallel outer stage holding a sequential sub-stage.
-    CompositeStage top("top", "Top");
-    CompositeStage* seq = addSubStage(top, "seq");
+    CompositeTask top("top", "Top");
+    CompositeTask* seq = addSubStage(top, "seq");
     useSequential(*seq);
-    LeafWorkItem* first = addLeaf(*seq, "first");
-    LeafWorkItem* second = addLeaf(*seq, "second");
-    LeafWorkItem* free = addLeaf(top, "free");
+    LeafTask* first = addLeaf(*seq, "first");
+    LeafTask* second = addLeaf(*seq, "second");
+    LeafTask* free = addLeaf(top, "free");
 
     top.activate();
     EXPECT_TRUE(first->status() == "Available" && second->status() == "Created") << "Nested: a sequential sub-stage inside a parallel stage keeps its order";
@@ -113,28 +113,28 @@ TEST(StageMode, NestedStages) {
 }
 
 TEST(StageMode, EdgeCases) {
-    CompositeStage emptyParallel("p", "Empty");
+    CompositeTask emptyParallel("p", "Empty");
     emptyParallel.activate();
     EXPECT_TRUE(emptyParallel.isComplete()) << "Edge: activating an empty parallel stage is harmless";
 
-    CompositeStage emptySequential("q", "Empty");
+    CompositeTask emptySequential("q", "Empty");
     useSequential(emptySequential);
     emptySequential.activate();
     EXPECT_TRUE(emptySequential.isComplete()) << "Edge: activating an empty sequential stage is harmless";
 
-    CompositeStage stage("s", "Stage");
+    CompositeTask stage("s", "Stage");
     useSequential(stage);
-    LeafWorkItem* a = addLeaf(stage, "a");
-    LeafWorkItem* b = addLeaf(stage, "b");
+    LeafTask* a = addLeaf(stage, "a");
+    LeafTask* b = addLeaf(stage, "b");
     stage.activate();
-    LeafWorkItem stranger("zz", "Stranger", "Developer");
+    LeafTask stranger("zz", "Stranger", "Developer");
     SequentialMode mode;
     mode.childCompleted(stage, stranger);
     EXPECT_TRUE(a->status() == "Available" && b->status() == "Created") << "Edge: completion of a node outside the stage is ignored";
 
-    CompositeStage parallel("pp", "Parallel");
-    LeafWorkItem* gone = addLeaf(parallel, "gone");
-    LeafWorkItem* live = addLeaf(parallel, "live");
+    CompositeTask parallel("pp", "Parallel");
+    LeafTask* gone = addLeaf(parallel, "gone");
+    LeafTask* live = addLeaf(parallel, "live");
     gone->cancel();
     parallel.activate();
     EXPECT_TRUE(gone->status() == "Cancelled") << "Edge: activation does not revive a cancelled child";
