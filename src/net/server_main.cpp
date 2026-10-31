@@ -12,7 +12,7 @@
 #include "server/ActivityLog.h"
 #include "server/ScenarioStore.h"
 #include "server/SessionHub.h"
-#include "patterns/structural/Tividy.h"
+#include "mediator/TividyMediator.h"
 
 #ifndef TIVIDY_WEB_ROOT
 #define TIVIDY_WEB_ROOT "web"
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    Tividy engine("Company");
+    TividyMediator engine("Company");
     ActivityLog log(engine);
     engine.bus().attach(&log);
     try {
