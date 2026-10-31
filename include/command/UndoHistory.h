@@ -6,10 +6,10 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "patterns/execution/EngineMemento.h"
-#include "patterns/execution/WorkflowObserver.h"
+#include "memento/EngineMemento.h"
+#include "observer/WorkflowObserver.h"
 
-class Tividy;
+class Mediator;
 
 class UndoHistory : public WorkflowObserver {
 public:
@@ -34,8 +34,8 @@ public:
 
     bool canUndo(const std::string& actor = "", bool anyone = true) const;
     bool canRedo(const std::string& actor = "", bool anyone = true) const;
-    Entry undo(Tividy& engine, const std::string& actor = "", bool anyone = true);
-    Entry redo(Tividy& engine, const std::string& actor = "", bool anyone = true);
+    Entry undo(Mediator& engine, const std::string& actor = "", bool anyone = true);
+    Entry redo(Mediator& engine, const std::string& actor = "", bool anyone = true);
     void clear();
 
     std::vector<Entry> undoEntries(std::size_t max) const;

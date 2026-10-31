@@ -1,5 +1,5 @@
-#include "patterns/execution/UndoHistory.h"
-#include "patterns/structural/Tividy.h"
+#include "command/UndoHistory.h"
+#include "mediator/Mediator.h"
 #include <stdexcept>
 
 UndoHistory::UndoHistory(std::size_t limit) : limit_(limit), replaying_(false) {}
@@ -23,7 +23,7 @@ bool UndoHistory::canUndo(const std::string& actor, bool anyone) const { return 
 
 bool UndoHistory::canRedo(const std::string& actor, bool anyone) const { return mayTake(redo_, actor, anyone); }
 
-UndoHistory::Entry UndoHistory::undo(Tividy& engine, const std::string& actor, bool anyone) {
+UndoHistory::Entry UndoHistory::undo(Mediator& engine, const std::string& actor, bool anyone) {
     if (!mayTake(undo_, actor, anyone)) {
         throw std::logic_error(undo_.empty() ? "Nothing to undo"
                                              : "The last action was " + undo_.back().actor + "'s, so only a manager can undo it");
@@ -44,7 +44,7 @@ UndoHistory::Entry UndoHistory::undo(Tividy& engine, const std::string& actor, b
     return entry;
 }
 
-UndoHistory::Entry UndoHistory::redo(Tividy& engine, const std::string& actor, bool anyone) {
+UndoHistory::Entry UndoHistory::redo(Mediator& engine, const std::string& actor, bool anyone) {
     if (!mayTake(redo_, actor, anyone)) {
         throw std::logic_error(redo_.empty() ? "Nothing to redo"
                                              : "The next redo is " + redo_.back().actor + "'s, so only a manager can redo it");
