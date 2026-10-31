@@ -10,5 +10,5 @@ build/
 
 # ignore ide settings vscode
 .vscode/
-
+latex/
 html/
