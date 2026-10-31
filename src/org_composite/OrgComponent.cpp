@@ -1,5 +1,5 @@
-#include "patterns/structural/OrgComponent.h"
-#include "patterns/structural/OrgUnit.h"
+#include "org_composite/OrgComponent.h"
+#include "org_composite/OrgUnit.h"
 
 OrgComponent::OrgComponent(const std::string& id, const std::string& name)
     : id_(id), name_(name), parent_(nullptr) {}

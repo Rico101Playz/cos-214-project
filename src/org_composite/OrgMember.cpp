@@ -1,5 +1,5 @@
-#include "patterns/structural/OrgMember.h"
-#include "core/Participant.h"
+#include "org_composite/OrgMember.h"
+#include "org_composite/Participant.h"
 #include <stdexcept>
 
 OrgMember::OrgMember(Participant* participant)

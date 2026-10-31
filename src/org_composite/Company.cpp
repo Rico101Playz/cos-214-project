@@ -1,5 +1,5 @@
-#include "core/Company.h"
-#include "patterns/structural/OrgMember.h"
+#include "org_composite/Company.h"
+#include "org_composite/OrgMember.h"
 #include <stdexcept>
 #include <utility>
 

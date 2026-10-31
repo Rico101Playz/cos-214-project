@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "patterns/structural/OrgComponent.h"
+#include "org_composite/OrgComponent.h"
 
 class OrgUnit : public OrgComponent {
 private:

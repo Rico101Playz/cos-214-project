@@ -1,7 +1,7 @@
-#include "patterns/execution/RoleBasedAssignment.h"
+#include "strategy/RoleBasedAssignment.h"
 #include <vector>
 
-Participant* RoleBasedAssignment::assign(const WorkItem&,
+Participant* RoleBasedAssignment::assign(const TaskFacts&,
                                          const std::string& role,
                                          const Organisation& organisation) const {
     std::vector<Participant*> candidates = organisation.eligible(role);

@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include "core/Organisation.h"
-#include "patterns/structural/OrgUnit.h"
+#include "org_composite/OrgUnit.h"
 
 class Company {
 private:

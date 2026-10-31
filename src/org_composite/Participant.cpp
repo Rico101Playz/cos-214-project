@@ -1,4 +1,4 @@
-#include "core/Participant.h"
+#include "org_composite/Participant.h"
 
 Participant::Participant(const std::string& name, const std::string& role)
     : name_(name), role_(role), load_(0), available_(true) {}

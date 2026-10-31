@@ -1,5 +1,5 @@
-#include "patterns/execution/RuleBasedAssignment.h"
-#include "patterns/execution/RoleBasedAssignment.h"
+#include "strategy/RuleBasedAssignment.h"
+#include "strategy/RoleBasedAssignment.h"
 #include <utility>
 
 RuleBasedAssignment::RuleBasedAssignment(std::unique_ptr<AssignmentStrategy> fallback)
@@ -21,18 +21,17 @@ void RuleBasedAssignment::addRule(const std::string& fromRole,
     rules_.push_back(rule);
 }
 
-Participant* RuleBasedAssignment::assign(const WorkItem& item,
+Participant* RuleBasedAssignment::assign(const TaskFacts& facts,
                                          const std::string& role,
                                          const Organisation& organisation) const {
     for (std::size_t i = 0; i < rules_.size(); ++i) {
         const Rule& rule = rules_[i];
-        if (rule.fromRole == role &&
-            item.hasData(rule.dataKey) &&
-            item.getData(rule.dataKey) == rule.dataValue) {
-            return fallback_->assign(item, rule.toRole, organisation);
+        TaskFacts::const_iterator fact = facts.find(rule.dataKey);
+        if (rule.fromRole == role && fact != facts.end() && fact->second == rule.dataValue) {
+            return fallback_->assign(facts, rule.toRole, organisation);
         }
     }
-    return fallback_->assign(item, role, organisation);
+    return fallback_->assign(facts, role, organisation);
 }
 
 std::string RuleBasedAssignment::name() const {

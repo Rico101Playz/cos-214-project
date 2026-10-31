@@ -1,16 +1,16 @@
 #include <gtest/gtest.h>
-#include "patterns/execution/AssignmentPipeline.h"
+#include "strategy/AssignmentPipeline.h"
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "core/Company.h"
-#include "core/WorkItem.h"
-#include "patterns/structural/OrgUnit.h"
-#include "patterns/structural/OrgMember.h"
-#include "patterns/execution/LeastLoadedAssignment.h"
-#include "patterns/execution/RoleBasedAssignment.h"
+#include "org_composite/Company.h"
+#include "composite/LeafTask.h"
+#include "org_composite/OrgUnit.h"
+#include "org_composite/OrgMember.h"
+#include "strategy/LeastLoadedAssignment.h"
+#include "strategy/RoleBasedAssignment.h"
 
 namespace {
 
@@ -91,29 +91,29 @@ TEST(CompanyComposite, ScopedAssignment) {
     EXPECT_TRUE(org.eligible("Developer", "missing").empty()) << "Org: an unknown unit has nobody eligible";
 
     org.find("Bob")->addLoad(3);
-    WorkItem item("fix", "Fix it", "Developer");
+    LeafTask item("fix", "Fix it", "Developer");
     item.setData("unit", "backend");
     LeastLoadedAssignment least;
     TeamFirstPipeline leastInTeam(org, least);
-    EXPECT_EQ(leastInTeam.choose(item, "Developer").person->name(), "Ben") << "Bridge: LeastLoaded picks the least busy person in the team";
+    EXPECT_EQ(leastInTeam.choose(item.data(), "Developer").person->name(), "Ben") << "Bridge: LeastLoaded picks the least busy person in the team";
 
-    WorkItem front("ui", "Build UI", "Developer");
+    LeafTask front("ui", "Build UI", "Developer");
     front.setData("unit", "frontend");
     RoleBasedAssignment roleBased;
     TeamFirstPipeline firstInTeam(org, roleBased);
-    EXPECT_EQ(firstInTeam.choose(front, "Developer").person->name(), "Fay") << "Bridge: RoleBased only looks inside the item's team";
+    EXPECT_EQ(firstInTeam.choose(front.data(), "Developer").person->name(), "Fay") << "Bridge: RoleBased only looks inside the item's team";
 
-    WorkItem anyone("chore", "Tidy up", "");
+    LeafTask anyone("chore", "Tidy up", "");
     anyone.setData("unit", "engineering");
-    Participant* chosen = leastInTeam.choose(anyone, "").person;
+    Participant* chosen = leastInTeam.choose(anyone.data(), "").person;
     EXPECT_TRUE(chosen != nullptr && chosen->name() != "Maya") << "Bridge: an empty role never picks a manager";
 
     org.find("Fay")->setAvailable(false);
-    AssignmentPipeline::Result widened = firstInTeam.choose(front, "Developer");
+    AssignmentPipeline::Result widened = firstInTeam.choose(front.data(), "Developer");
     EXPECT_TRUE(widened.person != nullptr && widened.person->name() != "Fay") << "Bridge: nobody free in the team widens to the parent team";
     EXPECT_EQ(widened.via.find("widened"), 0u) << "Bridge: the result says it was widened";
     CompanyWidePipeline wide(org, roleBased);
-    EXPECT_EQ(wide.choose(front, "Developer").via, "the whole company") << "Bridge: the same strategy behind a different pipeline";
+    EXPECT_EQ(wide.choose(front.data(), "Developer").via, "the whole company") << "Bridge: the same strategy behind a different pipeline";
 }
 
 }

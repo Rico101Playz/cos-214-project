@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "patterns/execution/AssignmentStrategy.h"
+#include "strategy/AssignmentStrategy.h"
 
 // Routes work by the item's data, then lets a fallback strategy pick the person.
 //
@@ -40,7 +40,7 @@ public:
                  const std::string& dataValue,
                  const std::string& toRole);
 
-    Participant* assign(const WorkItem& item,
+    Participant* assign(const TaskFacts& facts,
                         const std::string& role,
                         const Organisation& organisation) const override;
 

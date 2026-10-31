@@ -1,7 +1,7 @@
-#include "patterns/execution/LeastLoadedAssignment.h"
+#include "strategy/LeastLoadedAssignment.h"
 #include <vector>
 
-Participant* LeastLoadedAssignment::assign(const WorkItem&,
+Participant* LeastLoadedAssignment::assign(const TaskFacts&,
                                            const std::string& role,
                                            const Organisation& organisation) const {
     std::vector<Participant*> candidates = organisation.eligible(role);

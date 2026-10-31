@@ -1,10 +1,11 @@
 #ifndef ASSIGNMENTSERVICE_H
 #define ASSIGNMENTSERVICE_H
 
+#include <map>
 #include <memory>
 #include <string>
 #include "core/Organisation.h"
-#include "patterns/execution/AssignmentStrategy.h"
+#include "strategy/AssignmentStrategy.h"
 
 // STRATEGY pattern - the CONTEXT.
 //
@@ -17,21 +18,27 @@
 // the service owns its current strategy (strategy_).
 class AssignmentService {
 private:
-    const Organisation& organisation_;
+    const Organisation* organisation_;      // who chooseAssignee() looks at; null when only strategies are kept
     std::unique_ptr<AssignmentStrategy> strategy_;
+    std::map<std::string, std::unique_ptr<AssignmentStrategy> > policies_;
 
 public:
     // Starts with RoleBasedAssignment so a strategy is always present.
+    AssignmentService();
     explicit AssignmentService(const Organisation& organisation);
 
     // Throws std::invalid_argument for a null strategy (the current one is kept).
     void setStrategy(std::unique_ptr<AssignmentStrategy> strategy);
 
     const AssignmentStrategy& strategy() const;
+    // The strategy a policy uses (e.g. "BusyTeam"); the current strategy for a
+    // policy with none of its own. Throws std::invalid_argument for a null strategy.
+    void setStrategy(const std::string& policy, std::unique_ptr<AssignmentStrategy> strategy);
+    const AssignmentStrategy& strategyFor(const std::string& policy) const;
 
     // Chooses a participant for the role; nullptr when nobody is eligible.
     // Does not change anyone's load - the caller records the assignment.
-    Participant* chooseAssignee(const WorkItem& item, const std::string& role) const;
+    Participant* chooseAssignee(const TaskFacts& facts, const std::string& role) const;
 };
 
 #endif // ASSIGNMENTSERVICE_H

@@ -1,7 +1,7 @@
 #ifndef ORGMEMBER_H
 #define ORGMEMBER_H
 
-#include "patterns/structural/OrgComponent.h"
+#include "org_composite/OrgComponent.h"
 
 class OrgMember : public OrgComponent {
 private:

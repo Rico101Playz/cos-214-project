@@ -1,4 +1,4 @@
-#include "patterns/structural/OrgUnit.h"
+#include "org_composite/OrgUnit.h"
 #include <stdexcept>
 #include <utility>
 
