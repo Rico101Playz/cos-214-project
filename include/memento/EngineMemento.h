@@ -3,11 +3,11 @@
 
 #include <string>
 
-class Tividy;
+class TividyMediator;
 
 class EngineMemento {
 private:
-    friend class Tividy;
+    friend class TividyMediator;
     std::string label_;
     std::string state_;
 

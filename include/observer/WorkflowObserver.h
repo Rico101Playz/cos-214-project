@@ -1,7 +1,7 @@
 #ifndef WORKFLOWOBSERVER_H
 #define WORKFLOWOBSERVER_H
 
-#include "patterns/execution/WorkflowEvent.h"
+#include "observer/WorkflowEvent.h"
 
 // OBSERVER pattern - the OBSERVER interface.
 //

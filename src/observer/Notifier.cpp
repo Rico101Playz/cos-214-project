@@ -1,4 +1,4 @@
-#include "patterns/execution/Notifier.h"
+#include "observer/Notifier.h"
 #include <ostream>
 
 Notifier::Notifier(std::ostream* out) : out_(out) {}

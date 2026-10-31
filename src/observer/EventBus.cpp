@@ -1,4 +1,4 @@
-#include "patterns/execution/EventBus.h"
+#include "observer/EventBus.h"
 #include <algorithm>
 
 bool EventBus::isAttached(const WorkflowObserver* observer) const {

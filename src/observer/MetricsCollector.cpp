@@ -1,4 +1,4 @@
-#include "patterns/execution/MetricsCollector.h"
+#include "observer/MetricsCollector.h"
 #include <sstream>
 
 MetricsCollector::MetricsCollector() : total_(0) {}

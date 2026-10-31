@@ -1,4 +1,4 @@
-#include "patterns/execution/EngineMemento.h"
+#include "memento/EngineMemento.h"
 
 EngineMemento::EngineMemento(const std::string& label, const std::string& state)
     : label_(label), state_(state) {}

@@ -1,11 +1,14 @@
-#include "patterns/structural/Tividy.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/OrgMember.h"
-#include "patterns/execution/SequentialMode.h"
-#include "patterns/execution/ParallelMode.h"
+#include "mediator/TividyMediator.h"
+#include "decorator/ApprovalWork.h"
+#include "decorator/BlockedWork.h"
+#include "decorator/ValidatedWork.h"
+#include "composite/LeafTask.h"
+#include "org_composite/OrgMember.h"
+#include "strategy/SequentialMode.h"
+#include "strategy/ParallelMode.h"
 #include "core/TextRecord.h"
-#include "patterns/creation/PolicyCatalog.h"
-#include "patterns/creation/StateFactory.h"
+#include "abstract_factory/PolicyCatalog.h"
+#include "state/StateFactory.h"
 #include <set>
 
 #include <cstdlib>
@@ -31,7 +34,7 @@ void writeDefinition(std::string& out, const WorkflowDefinition& d) {
         put(out, Fields{ "dlayout", d.layout[i].id, d.layout[i].name, d.layout[i].parent });
     }
     for (std::size_t i = 0; i < d.templates.size(); ++i) {
-        const ItemTemplate& t = d.templates[i];
+        const TaskTemplate& t = d.templates[i];
         put(out, Fields{ "dtmpl", t.id, t.name, t.stage, t.role, t.unit, t.priority });
         for (std::size_t a = 0; a < t.approverRoles.size(); ++a) put(out, Fields{ "dtmpl-approver", t.approverRoles[a] });
         for (std::size_t b = 0; b < t.blockedBy.size(); ++b) put(out, Fields{ "dtmpl-blocker", t.blockedBy[b] });
@@ -48,7 +51,7 @@ bool readDefinitionLine(const Fields& f, WorkflowDefinition& d) {
     else if (k == "ddep" && f.size() >= 2) d.dependencies.push_back(f[1]);
     else if (k == "dlayout" && f.size() >= 4) d.layout.push_back(StageTemplate(f[1], f[2], f[3]));
     else if (k == "dtmpl" && f.size() >= 7) {
-        ItemTemplate t(f[1], f[2], f[4], f[5], "", f[6]);
+        TaskTemplate t(f[1], f[2], f[4], f[5], "", f[6]);
         t.stage = f[3];
         d.templates.push_back(t);
     } else if (k == "dtmpl-approver" && f.size() >= 2 && !d.templates.empty()) {
@@ -61,17 +64,21 @@ bool readDefinitionLine(const Fields& f, WorkflowDefinition& d) {
     return true;
 }
 
-void writeNode(std::string& out, WorkNode& node, const std::string& parentId) {
-    CompositeStage* stage = dynamic_cast<CompositeStage*>(&node);
+void writeNode(std::string& out, Task& node, const std::string& parentId) {
+    CompositeTask* stage = stageOf(&node);
     if (stage != nullptr) {
         put(out, Fields{ "stage", stage->id(), stage->name(), parentId, stage->mode().name() });
     } else {
-        LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(&node);
+        LeafTask* leaf = leafOf(&node);
         if (leaf == nullptr) return;
         put(out, Fields{ "item", leaf->id(), leaf->name(), parentId, leaf->role(), num(leaf->dueHours()),
                          leaf->status(), leaf->assignee(), leaf->reason(), leaf->priority(),
                          leaf->isReleased() ? "1" : "0" });
         for (std::size_t i = 0; i < leaf->blockedBy().size(); ++i) put(out, Fields{ "blocker", leaf->blockedBy()[i] });
+        if (leaf->validation() != nullptr) {
+            const std::vector<std::string>& keys = leaf->validation()->requiredKeys();
+            for (std::size_t i = 0; i < keys.size(); ++i) put(out, Fields{ "required", keys[i] });
+        }
         for (std::size_t i = 0; i < leaf->approverRoles().size(); ++i) put(out, Fields{ "approver", leaf->approverRoles()[i] });
         for (std::size_t i = 0; i < leaf->pendingApprovers().size(); ++i) put(out, Fields{ "pending", leaf->pendingApprovers()[i] });
         for (std::size_t i = 0; i < leaf->signatures().size(); ++i) {
@@ -111,36 +118,37 @@ struct PendingInstance {
     bool structured;
     bool signOff;
     WorkflowDefinition definition;
-    std::unique_ptr<CompositeStage> root;
-    std::map<std::string, WorkNode*> nodes;
-    LeafWorkItem* lastItem;
+    std::unique_ptr<CompositeTask> root;
+    std::map<std::string, Task*> nodes;
+    LeafTask* lastItem;
 
     PendingInstance() : stageIndex(0), structured(false), signOff(false), lastItem(nullptr) {}
 };
 
 }
 
-std::string Tividy::snapshot() const {
+std::string TividyMediator::snapshot() const {
     std::string out;
     put(out, Fields{ "tividy", "2" });
-    put(out, Fields{ "company", organisation_.name() });
-    put(out, Fields{ "counters", num(nextInstance_), num(nextTask_) });
-    writeUnits(out, organisation_.structure());
-    std::vector<Participant*> people = organisation_.participants();
+    put(out, Fields{ "company", orgFacade_.company().name() });
+    put(out, Fields{ "counters", num(projectFacade_.nextInstanceNumber()), num(projectFacade_.nextTaskNumber()) });
+    writeUnits(out, orgFacade_.company().structure());
+    std::vector<Participant*> people = orgFacade_.company().participants();
     for (std::size_t i = 0; i < people.size(); ++i) {
-        OrgUnit* unit = organisation_.unitOf(people[i]->name());
+        OrgUnit* unit = orgFacade_.company().unitOf(people[i]->name());
         put(out, Fields{ "person", people[i]->name(), people[i]->role(), unit ? unit->id() : "",
                          people[i]->isAvailable() ? "1" : "0" });
     }
-    for (std::map<std::string, WorkflowDefinition>::const_iterator it = definitions_.begin();
-         it != definitions_.end(); ++it) {
+    const std::map<std::string, WorkflowDefinition>& definitions = projectFacade_.definitions();
+    for (std::map<std::string, WorkflowDefinition>::const_iterator it = definitions.begin();
+         it != definitions.end(); ++it) {
         put(out, Fields{ "definition", it->first });
         writeDefinition(out, it->second);
         put(out, Fields{ "end" });
     }
-    for (std::size_t i = 0; i < instanceOrder_.size(); ++i) {
-        const WorkflowInstance& instance = findInstance(instanceOrder_[i]);
-        const Runtime& rt = runtime(instanceOrder_[i]);
+    for (std::size_t i = 0; i < projectFacade_.instanceIds().size(); ++i) {
+        const WorkflowInstance& instance = projectFacade_.findInstance(projectFacade_.instanceIds()[i]);
+        const Runtime& rt = projectFacade_.runtime(projectFacade_.instanceIds()[i]);
         put(out, Fields{ "instance", instance.id(), instance.name(), rt.factory->name(), instance.state(),
                          num(static_cast<long long>(instance.currentStageIndex())), instance.reason(),
                          rt.structured ? "1" : "0", instance.requiresSignOff() ? "1" : "0" });
@@ -154,7 +162,7 @@ std::string Tividy::snapshot() const {
     return out;
 }
 
-void Tividy::restore(const std::string& text) {
+void TividyMediator::restore(const std::string& text) {
     std::istringstream in(text);
     std::string raw;
     std::string company;
@@ -181,7 +189,7 @@ void Tividy::restore(const std::string& text) {
             if (k == "end") { current = nullptr; continue; }
             if (readDefinitionLine(f, current->definition)) continue;
             if (k == "root" && f.size() >= 3) {
-                current->root.reset(new CompositeStage(current->id, f[1]));
+                current->root.reset(new CompositeTask(current->id, f[1]));
                 current->root->setMode(modeNamed(f[2]));
                 current->nodes[current->id] = current->root.get();
                 continue;
@@ -190,47 +198,49 @@ void Tividy::restore(const std::string& text) {
                 throw std::invalid_argument("Line " + std::to_string(lineNo) + ": node before root");
             }
             if (k == "stage" && f.size() >= 5) {
-                CompositeStage* parent = dynamic_cast<CompositeStage*>(current->nodes[f[3]]);
+                CompositeTask* parent = stageOf(current->nodes[f[3]]);
                 if (parent == nullptr) throw std::invalid_argument("Line " + std::to_string(lineNo) + ": unknown parent " + f[3]);
-                std::unique_ptr<CompositeStage> stage(new CompositeStage(f[1], f[2]));
+                std::unique_ptr<CompositeTask> stage(new CompositeTask(f[1], f[2]));
                 stage->setMode(modeNamed(f[4]));
                 current->nodes[f[1]] = stage.get();
-                parent->add(std::unique_ptr<WorkNode>(stage.release()));
+                parent->add(std::unique_ptr<Task>(stage.release()));
                 current->lastItem = nullptr;
                 continue;
             }
             if (k == "item" && f.size() >= 11) {
-                WorkNode* parentNode = current->nodes[f[3]];
+                Task* parentNode = current->nodes[f[3]];
                 if (parentNode == nullptr) throw std::invalid_argument("Line " + std::to_string(lineNo) + ": unknown parent " + f[3]);
-                std::unique_ptr<LeafWorkItem> leaf(new LeafWorkItem(f[1], f[2], f[4], toInt(f[5])));
+                std::unique_ptr<LeafTask> leaf(new LeafTask(f[1], f[2], f[4], toInt(f[5])));
                 leaf->restore(f[6], f[7], f[8]);
-                leaf->setPriority(LeafWorkItem::validPriority(f[9]) ? f[9] : std::string("Medium"));
+                leaf->setPriority(LeafTask::validPriority(f[9]) ? f[9] : std::string("Medium"));
                 leaf->setReleased(f[10] == "1");
-                LeafWorkItem* added = leaf.get();
-                CompositeStage* stage = dynamic_cast<CompositeStage*>(parentNode);
+                LeafTask* added = leaf.get();
+                std::unique_ptr<Task> node(decorateProjectTask(std::unique_ptr<Task>(leaf.release())));
+                CompositeTask* stage = stageOf(parentNode);
                 if (stage != nullptr) {
-                    stage->add(std::unique_ptr<WorkNode>(leaf.release()));
+                    stage->add(std::move(node));
                 } else {
-                    LeafWorkItem* parentItem = dynamic_cast<LeafWorkItem*>(parentNode);
+                    LeafTask* parentItem = leafOf(parentNode);
                     if (parentItem == nullptr) throw std::invalid_argument("Line " + std::to_string(lineNo) + ": bad parent");
-                    parentItem->addSubtask(std::move(leaf));
+                    CompositeTask::addSubtask(*parentItem, std::move(node));
                 }
                 current->nodes[f[1]] = added;
                 current->lastItem = added;
                 continue;
             }
-            LeafWorkItem* item = current->lastItem;
+            LeafTask* item = current->lastItem;
             if (item == nullptr) throw std::invalid_argument("Line " + std::to_string(lineNo) + ": detail without an item");
-            if (k == "blocker" && f.size() >= 2) item->addBlocker(f[1]);
+            if (k == "blocker" && f.size() >= 2) item->blocking()->addBlocker(f[1]);
+            else if (k == "required" && f.size() >= 2) item->validation()->require(f[1]);
             else if (k == "approver" && f.size() >= 2) {
                 std::vector<std::string> roles = item->approverRoles();
                 roles.push_back(f[1]);
-                item->setApproverRoles(roles);
+                item->approvals()->setApproverRoles(roles);
             } else if (k == "pending" && f.size() >= 2) {
                 std::vector<std::string> roles = item->pendingApprovers();
                 roles.push_back(f[1]);
-                item->setPendingApprovers(roles);
-            } else if (k == "signed" && f.size() >= 3) item->addSignature(f[1], f[2]);
+                item->approvals()->setPendingApprovers(roles);
+            } else if (k == "signed" && f.size() >= 3) item->approvals()->addSignature(f[1], f[2]);
             else if (k == "data" && f.size() >= 3) item->setData(f[1], f[2]);
             else throw std::invalid_argument("Line " + std::to_string(lineNo) + ": unexpected '" + k + "'");
             continue;
@@ -312,32 +322,29 @@ void Tividy::restore(const std::string& text) {
         if (!p.policy.empty() && !PolicyCatalog::exists(p.policy)) {
             throw std::invalid_argument("Project " + p.id + " uses an unknown policy " + p.policy);
         }
-        createInstanceState(p.state);
-        runtimes[p.id] = makeRuntime(p.policy, p.structured, fresh.people());
+        if (p.state != WorkflowInstance::CREATED && p.state != WorkflowInstance::RUNNING &&
+            p.state != WorkflowInstance::AWAITING_SIGNOFF && p.state != WorkflowInstance::COMPLETED &&
+            p.state != WorkflowInstance::CANCELLED) {
+            throw std::invalid_argument("Project " + p.id + " has an unknown status " + p.state);
+        }
+        runtimes[p.id] = makeRuntime(p.policy, p.structured, fresh.hasOwner() ? Company::OWNER_ROLE : std::string());
     }
 
-    organisation_.swap(fresh);
-    definitions_ = definitions;
+    orgFacade_.company().swap(fresh);
+    projectFacade_.setDefinitions(definitions);
 
     std::map<std::string, std::unique_ptr<WorkflowInstance> > instances;
     std::vector<std::string> order;
     for (std::size_t i = 0; i < pending.size(); ++i) {
         PendingInstance& p = *pending[i];
-        std::unique_ptr<WorkflowInstance> instance;
-        std::map<std::string, std::unique_ptr<WorkflowInstance> >::iterator existing = instances_.find(p.id);
-        if (existing != instances_.end()) {
-            instance = std::move(existing->second);
-        } else {
+        std::unique_ptr<WorkflowInstance> instance = projectFacade_.takeInstance(p.id);
+        if (!instance) {
             instance.reset(new WorkflowInstance(p.id, p.definition));
         }
         instance->rebuild(p.definition, p.name, std::move(p.root), p.state, p.stageIndex, p.reason, p.signOff);
         instances[p.id] = std::move(instance);
         order.push_back(p.id);
     }
-    instances_.swap(instances);
-    runtimes_.swap(runtimes);
-    instanceOrder_ = order;
-    nextInstance_ = nextInstance;
-    nextTask_ = nextTask;
+    projectFacade_.replaceInstances(instances, runtimes, order, nextInstance, nextTask);
     recomputeLoads();
 }

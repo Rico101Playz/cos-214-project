@@ -44,9 +44,9 @@ public:
 };
 
 // ---------------------------------------------------------
-// InstanceMemento
+// Memento
 // ---------------------------------------------------------
-class InstanceMemento {
+class Memento {
 private:
     std::string label;
     std::string statusName;
@@ -55,7 +55,7 @@ private:
     std::size_t stageIndex;
 
 public:
-    InstanceMemento(std::string lbl, std::string statusName);
+    Memento(std::string lbl, std::string statusName);
 
     std::size_t getStageIndex() const;
     void setStageIndex(std::size_t index);
@@ -75,13 +75,13 @@ public:
 // ---------------------------------------------------------
 class SnapshotStore {
 private:
-    std::map<std::string, std::map<std::string, std::shared_ptr<InstanceMemento>>> snapshots;
+    std::map<std::string, std::map<std::string, std::shared_ptr<Memento>>> snapshots;
 
 public:
     ~SnapshotStore() = default;
 
-    void save(const std::string& instanceId, std::shared_ptr<InstanceMemento> memento);
-    InstanceMemento* get(const std::string& instanceId, const std::string& label) const;
+    void save(const std::string& instanceId, std::shared_ptr<Memento> memento);
+    Memento* get(const std::string& instanceId, const std::string& label) const;
     bool has(const std::string& instanceId, const std::string& label) const;
 };
 

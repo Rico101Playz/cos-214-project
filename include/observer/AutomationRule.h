@@ -3,7 +3,7 @@
 
 #include <functional>
 #include <string>
-#include "patterns/execution/WorkflowObserver.h"
+#include "observer/WorkflowObserver.h"
 
 // OBSERVER pattern - a CONCRETE OBSERVER.
 //

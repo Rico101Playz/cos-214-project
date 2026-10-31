@@ -1,4 +1,4 @@
-#include "patterns/execution/AutomationRule.h"
+#include "observer/AutomationRule.h"
 
 AutomationRule::AutomationRule(const std::string& name, const std::string& eventType,
                                Action action)

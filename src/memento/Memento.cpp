@@ -1,4 +1,4 @@
-#include "patterns/execution/Memento.h"
+#include "memento/Memento.h"
 #include <utility>
 
 // ---------------------------------------------------------
@@ -44,53 +44,53 @@ bool ApprovalSnapshot::getApproved() const {
 }
 
 // ---------------------------------------------------------
-// InstanceMemento
+// Memento
 // ---------------------------------------------------------
-InstanceMemento::InstanceMemento(std::string lbl, std::string statName)
+Memento::Memento(std::string lbl, std::string statName)
     : label(std::move(lbl)), statusName(std::move(statName)), stageIndex(0) {}
 
-std::size_t InstanceMemento::getStageIndex() const {
+std::size_t Memento::getStageIndex() const {
     return stageIndex;
 }
 
-void InstanceMemento::setStageIndex(std::size_t index) {
+void Memento::setStageIndex(std::size_t index) {
     stageIndex = index;
 }
 
-const std::string& InstanceMemento::getLabel() const {
+const std::string& Memento::getLabel() const {
     return label; 
 }
 
-const std::string& InstanceMemento::getStatusName() const { 
+const std::string& Memento::getStatusName() const { 
     return statusName; 
 }
 
-const std::vector<WorkItemSnapshot>& InstanceMemento::getItems() const { 
+const std::vector<WorkItemSnapshot>& Memento::getItems() const { 
     return items; 
 }
 
-const std::vector<ApprovalSnapshot>& InstanceMemento::getApprovals() const { 
+const std::vector<ApprovalSnapshot>& Memento::getApprovals() const { 
     return approvals; 
 }
 
-void InstanceMemento::addItem(WorkItemSnapshot item) {
+void Memento::addItem(WorkItemSnapshot item) {
     items.push_back(std::move(item));
 }
 
-void InstanceMemento::addApproval(ApprovalSnapshot approval) {
+void Memento::addApproval(ApprovalSnapshot approval) {
     approvals.push_back(std::move(approval));
 }
 
 // ---------------------------------------------------------
 // SnapshotStore
 // ---------------------------------------------------------
-void SnapshotStore::save(const std::string& instanceId, std::shared_ptr<InstanceMemento> memento) {
+void SnapshotStore::save(const std::string& instanceId, std::shared_ptr<Memento> memento) {
     if (!memento) return;
     std::string label = memento->getLabel();
     snapshots[instanceId][label] = std::move(memento);
 }
 
-InstanceMemento* SnapshotStore::get(const std::string& instanceId, const std::string& label) const {
+Memento* SnapshotStore::get(const std::string& instanceId, const std::string& label) const {
     auto itInstance = snapshots.find(instanceId);
     if (itInstance != snapshots.end()) {
         auto itLabel = itInstance->second.find(label);

@@ -1,4 +1,4 @@
-#include "patterns/execution/WorkflowEvent.h"
+#include "observer/WorkflowEvent.h"
 
 const char* const WorkflowEvent::INSTANCE_STARTED = "InstanceStarted";
 const char* const WorkflowEvent::INSTANCE_COMPLETED = "InstanceCompleted";

@@ -4,7 +4,7 @@
 #include <iosfwd>
 #include <string>
 #include <vector>
-#include "patterns/execution/WorkflowObserver.h"
+#include "observer/WorkflowObserver.h"
 
 // OBSERVER pattern - a CONCRETE OBSERVER.
 //

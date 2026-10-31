@@ -3,8 +3,8 @@
 
 #include <cstddef>
 #include <vector>
-#include "patterns/execution/WorkflowEvent.h"
-#include "patterns/execution/WorkflowObserver.h"
+#include "observer/WorkflowEvent.h"
+#include "observer/WorkflowObserver.h"
 
 // OBSERVER pattern - the SUBJECT.
 //

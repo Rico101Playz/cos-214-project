@@ -1,4 +1,4 @@
-#include "patterns/execution/ActivityFeed.h"
+#include "observer/ActivityFeed.h"
 
 void ActivityFeed::onEvent(const WorkflowEvent& event) {
     entries_.push_back(event.describe());
