@@ -183,7 +183,8 @@ Development follows a strict branching workflow:
    * `docs/<short-description>`
    * `fix/<short-description>`
 4. **Commits & Pull Requests:** Make atomic commits with descriptive commit messages, and submit a Pull Request (PR) targeting the `dev` branch.
-5. **Documentation Updates:** Log significant architectural adjustments under `docs/revisions/` alongside relevant diagram updates.
+5. **GitHub Actions & Testing:** Wait for `build-and-test` to go green. If it fails, open the run under the Actions tab, read the failing step, fix it and push again.
+6. **Documentation Updates:** Log significant architectural adjustments under `docs/revisions/` alongside relevant diagram updates.
 
 ---
 
