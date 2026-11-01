@@ -2,7 +2,7 @@
 #include "server/EventText.h"
 #include <ctime>
 
-ActivityLog::ActivityLog(const Tividy& engine, std::size_t limit)
+ActivityLog::ActivityLog(const TividyMediator& engine, std::size_t limit)
     : engine_(engine), limit_(limit), version_(0) {}
 
 std::string ActivityLog::timestamp() {

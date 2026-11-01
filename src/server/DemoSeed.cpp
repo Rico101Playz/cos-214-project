@@ -1,9 +1,9 @@
 #include "server/DemoSeed.h"
-#include "patterns/structural/Tividy.h"
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/creation/FeatureDeliveryDirector.h"
+#include "mediator/TividyMediator.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "builder/FeatureDeliveryDirector.h"
 
-void DemoSeed::company(Tividy& engine) {
+void DemoSeed::company(TividyMediator& engine) {
     engine.addUnit("", "engineering", "Engineering");
     engine.addUnit("engineering", "backend", "Back-end");
     engine.addUnit("engineering", "frontend", "Front-end");
@@ -23,7 +23,7 @@ void DemoSeed::company(Tividy& engine) {
     engine.addPerson("Ray", "ReleaseManager", "platform");
 }
 
-void DemoSeed::templates(Tividy& engine) {
+void DemoSeed::templates(TividyMediator& engine) {
     ConcreteDefinitionBuilder feature;
     FeatureDeliveryDirector director(&feature);
     director.construct("SmallTeam");
@@ -34,6 +34,6 @@ void DemoSeed::templates(Tividy& engine) {
     blank.setPolicy("BusyTeam");
     blank.setSignOff(false);
     blank.addStructuredStage(StageTemplate("board", "Board"));
-    blank.addStructuredItem("board", ItemTemplate("kickoff", "Kick-off meeting", "Manager", "", "Manager"));
+    blank.addStructuredItem("board", TaskTemplate("kickoff", "Kick-off meeting", "Manager", "", "Manager"));
     engine.loadDefinition("Blank board", blank.build());
 }

@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "patterns/structural/Tividy.h"
+#include "mediator/TividyMediator.h"
 #include "server/ClientSession.h"
-#include "server/CommandPipeline.h"
+#include "server/RequestReader.h"
 #include "server/DemoSeed.h"
 #include "server/Json.h"
 #include "server/SessionHub.h"
@@ -62,10 +62,10 @@ std::string command(const std::string& cmd, const std::string& args) {
 }
 
 TEST(Server, Pipeline) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
-    CommandPipeline pipeline(engine);
+    RequestReader pipeline(engine);
     Inbox inbox;
     ClientSession session(1, engine, inbox.sink());
 
@@ -86,7 +86,7 @@ TEST(Server, Pipeline) {
     EXPECT_EQ(r.str("code"), "invalid") << "Pipeline: fields must have the right type";
     r = pipeline.handle(session, command("claim", "{\"project\":\"" + std::string(300, 'a') + "\",\"item\":\"x\"}"));
     EXPECT_EQ(r.str("code"), "invalid") << "Pipeline: over-long fields are refused";
-    r = pipeline.handle(session, std::string(CommandPipeline::MAX_MESSAGE + 1, ' '));
+    r = pipeline.handle(session, std::string(RequestReader::MAX_MESSAGE + 1, ' '));
     EXPECT_EQ(r.str("code"), "bad_request") << "Pipeline: oversized messages are refused";
     r = pipeline.handle(session, command("logout", "{}"));
     EXPECT_TRUE(r.get("ok").asBool() && !session.loggedIn()) << "Pipeline: logout unbinds the session";
@@ -94,7 +94,7 @@ TEST(Server, Pipeline) {
 }
 
 TEST(Server, Hub) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
     SessionHub hub(engine);
@@ -155,7 +155,7 @@ TEST(Server, Hub) {
 }
 
 TEST(Server, NewCommands) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
     ActivityLog log(engine);
@@ -216,7 +216,7 @@ TEST(Server, NewCommands) {
 
 
 TEST(Server, RemovedPersonIsSignedOut) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
     engine.clearHistory();

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
-#include "patterns/execution/AssignmentPipeline.h"
-#include "patterns/execution/RoleBasedAssignment.h"
+#include "strategy/AssignmentPipeline.h"
+#include "chain_of_responsibility/RoleApprovalHandler.h"
+#include "strategy/RoleBasedAssignment.h"
 #include <cstdio>
 #ifdef _WIN32
 #include <direct.h>
@@ -11,19 +12,19 @@
 #include <stdexcept>
 #include <string>
 
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/SecuredTividy.h"
-#include "patterns/structural/Tividy.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "composite/LeafTask.h"
+#include "proxy/SecuredMediator.h"
+#include "mediator/TividyMediator.h"
 #include "server/ActivityLog.h"
 #include "server/DemoSeed.h"
 #include "server/ScenarioStore.h"
-#include "patterns/execution/UndoHistory.h"
-#include "patterns/execution/ApprovalRequest.h"
-#include "patterns/execution/ReviewerHandler.h"
-#include "patterns/execution/LeastLoadedAssignment.h"
-#include "patterns/execution/CommandInvoker.h"
-#include "patterns/execution/SetDataCommand.h"
+#include "command/UndoHistory.h"
+#include "chain_of_responsibility/ApprovalRequest.h"
+#include "strategy/LeastLoadedAssignment.h"
+#include "command/CommandInvoker.h"
+#include "command/RequestCommand.h"
+#include "project_test_helpers.h"
 
 namespace {
 
@@ -45,11 +46,11 @@ bool denied(F f) {
     return false;
 }
 
-LeafWorkItem& leafOf(Tividy& engine, const std::string& p, const std::string& id) {
-    return *dynamic_cast<LeafWorkItem*>(engine.instance(p).item(id));
+LeafTask& leafOf(TividyMediator& engine, const std::string& p, const std::string& id) {
+    return *leafOf(engine.instance(p).item(id));
 }
 
-void seed(Tividy& engine) {
+void seed(TividyMediator& engine) {
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
     engine.clearHistory();
@@ -57,7 +58,7 @@ void seed(Tividy& engine) {
 
 class ApprovalFlowTest : public ::testing::Test {
 protected:
-    Tividy engine;
+    TividyMediator engine;
 
     ApprovalFlowTest() : engine("Acme") {}
 
@@ -66,16 +67,16 @@ protected:
     }
 };
 
-void work(Tividy& engine, const std::string& p, const std::string& id) {
-    LeafWorkItem& leaf = leafOf(engine, p, id);
-    if (leaf.assignee().empty() || leaf.status() == WorkItem::AVAILABLE) engine.autoAssign(p, id);
+void work(TividyMediator& engine, const std::string& p, const std::string& id) {
+    LeafTask& leaf = leafOf(engine, p, id);
+    if (leaf.assignee().empty() || leaf.status() == LeafTask::AVAILABLE) engine.autoAssign(p, id);
     engine.start(p, id);
     engine.complete(p, id);
 }
 
-void signAll(Tividy& engine, const std::string& p, const std::string& id) {
+void signAll(TividyMediator& engine, const std::string& p, const std::string& id) {
     int guard = 0;
-    while (leafOf(engine, p, id).status() == WorkItem::AWAITING_APPROVAL && guard++ < 5) {
+    while (leafOf(engine, p, id).status() == LeafTask::AWAITING_APPROVAL && guard++ < 5) {
         std::string role = leafOf(engine, p, id).pendingApprover();
         std::vector<Participant*> people = engine.organisation().eligible(role, "");
         std::string signer;
@@ -104,27 +105,27 @@ TEST_F(ApprovalFlowTest, Priority) {
     TaskSpec plain;
     plain.name = "Chore";
     EXPECT_EQ(leafOf(engine, p, engine.addTask(p, plain)).priority(), "Medium") << "Priority: Medium is the default";
-    EXPECT_TRUE(LeafWorkItem::priorityRank("Urgent") > LeafWorkItem::priorityRank("Low")) << "Priority: levels are ordered";
+    EXPECT_TRUE(LeafTask::priorityRank("Urgent") > LeafTask::priorityRank("Low")) << "Priority: levels are ordered";
 }
 
 TEST_F(ApprovalFlowTest, SubtasksAndWithdraw) {
     std::string p = engine.startProject("Feature Delivery", "Dark mode", "BusyTeam");
     work(engine, p, "spec");
-    LeafWorkItem& spec = leafOf(engine, p, "spec");
-    EXPECT_EQ(spec.status(), WorkItem::AWAITING_APPROVAL) << "Withdraw: spec is waiting for a manager";
+    LeafTask& spec = leafOf(engine, p, "spec");
+    EXPECT_EQ(spec.status(), LeafTask::AWAITING_APPROVAL) << "Withdraw: spec is waiting for a manager";
 
     engine.withdraw(p, "spec");
-    EXPECT_TRUE(spec.status() == WorkItem::IN_PROGRESS && spec.pendingApprovers().empty()) << "Withdraw: taking it back returns it to In progress and clears the approvals";
+    EXPECT_TRUE(spec.status() == LeafTask::IN_PROGRESS && spec.pendingApprovers().empty()) << "Withdraw: taking it back returns it to In progress and clears the approvals";
     EXPECT_TRUE(throwsLogic([&] { engine.withdraw(p, "spec"); })) << "Withdraw: only work in review can be taken back";
     engine.complete(p, "spec");
 
     TaskSpec missing;
     missing.name = "Add the error cases";
     std::string sub = engine.addSubtask(p, "spec", missing);
-    LeafWorkItem& subtask = leafOf(engine, p, sub);
-    EXPECT_EQ(spec.status(), WorkItem::REJECTED) << "Sub-task: adding one to work in review sends it back";
+    LeafTask& subtask = leafOf(engine, p, sub);
+    EXPECT_EQ(spec.status(), LeafTask::REJECTED) << "Sub-task: adding one to work in review sends it back";
     EXPECT_NE(spec.reason().find("Add the error cases"), std::string::npos) << "Sub-task: the reason names the sub-task";
-    EXPECT_TRUE(subtask.parentItem() == &spec && spec.childCount() == 1) << "Sub-task: it sits under its parent item (Composite)";
+    EXPECT_TRUE(subtask.parentItem() == &spec && spec.outermost().childCount() == 1) << "Sub-task: it sits under its parent item (Composite)";
     EXPECT_TRUE(subtask.unit() == "engineering" && subtask.priority() == spec.priority()) << "Sub-task: it inherits team and priority";
     EXPECT_TRUE(subtask.role() == "TechLead" && subtask.assignee() == "Tom") << "Sub-task: it inherits the parent's role, so the pipeline finds the TechLead in Engineering";
     EXPECT_EQ(engine.workFor("Tom").size(), 2u) << "Sub-task: the iterator lists it under My work";
@@ -135,9 +136,9 @@ TEST_F(ApprovalFlowTest, SubtasksAndWithdraw) {
     engine.complete(p, sub);
     EXPECT_TRUE(throwsLogic([&] { engine.complete(p, "spec"); })) << "Sub-task: a sub-task in review still blocks the parent";
     signAll(engine, p, sub);
-    EXPECT_EQ(subtask.status(), WorkItem::COMPLETED) << "Sub-task: it is approved on its own";
+    EXPECT_EQ(subtask.status(), LeafTask::COMPLETED) << "Sub-task: it is approved on its own";
     engine.complete(p, "spec");
-    EXPECT_EQ(spec.status(), WorkItem::AWAITING_APPROVAL) << "Sub-task: once it is done the parent can go back to review";
+    EXPECT_EQ(spec.status(), LeafTask::AWAITING_APPROVAL) << "Sub-task: once it is done the parent can go back to review";
 
     TaskSpec nested;
     nested.name = "Level";
@@ -148,7 +149,7 @@ TEST_F(ApprovalFlowTest, SubtasksAndWithdraw) {
     EXPECT_TRUE(throwsLogic([&] { engine.addSubtask(p, sub, nested); })) << "Sub-task: finished work cannot get new sub-tasks";
 
     engine.cancel(p, "stop");
-    EXPECT_EQ(leafOf(engine, p, c).status(), WorkItem::CANCELLED) << "Sub-task: cancelling the project reaches every level";
+    EXPECT_EQ(leafOf(engine, p, c).status(), LeafTask::CANCELLED) << "Sub-task: cancelling the project reaches every level";
 }
 
 TEST_F(ApprovalFlowTest, Pipeline) {
@@ -187,27 +188,27 @@ TEST_F(ApprovalFlowTest, MultiApproval) {
     b.reset("Review");
     b.setPolicy("BusyTeam");
     b.addStructuredStage(StageTemplate("only", "Only"));
-    b.addStructuredItem("only", ItemTemplate("change", "Risky change", "Developer", "backend", "TechLead").alsoApprovedBy("Manager"));
+    b.addStructuredItem("only", TaskTemplate("change", "Risky change", "Developer", "backend", "TechLead").alsoApprovedBy("Manager"));
     engine.loadDefinition("Review", b.build());
     std::string p = engine.startProject("Review", "", "");
     work(engine, p, "change");
-    LeafWorkItem& change = leafOf(engine, p, "change");
+    LeafTask& change = leafOf(engine, p, "change");
     EXPECT_EQ(change.pendingApprovers().size(), 2u) << "Approvals: the item waits for two sign-offs";
     EXPECT_TRUE(engine.approvalsFor("Tom").size() == 1 && engine.approvalsFor("Maya").size() == 1) << "Approvals: both approvers see it in their list";
     EXPECT_TRUE(engine.approvalsFor("Rita").empty()) << "Approvals: other roles do not";
 
     engine.approveAs(p, "change", "Tom");
-    EXPECT_TRUE(change.status() == WorkItem::AWAITING_APPROVAL && change.signatures().size() == 1) << "Approvals: one signature is not enough";
+    EXPECT_TRUE(change.status() == LeafTask::AWAITING_APPROVAL && change.signatures().size() == 1) << "Approvals: one signature is not enough";
     EXPECT_TRUE(throwsLogic([&] { engine.approveAs(p, "change", "Tom"); })) << "Approvals: nobody signs twice";
     EXPECT_TRUE(throwsLogic([&] { engine.approveAs(p, "change", "Rita"); })) << "Approvals: a Reviewer cannot fill a Manager slot";
     engine.approveAs(p, "change", "Maya");
-    EXPECT_EQ(change.status(), WorkItem::COMPLETED) << "Approvals: the last signature completes it";
+    EXPECT_EQ(change.status(), LeafTask::COMPLETED) << "Approvals: the last signature completes it";
 
     engine.undo();
-    LeafWorkItem& restored = leafOf(engine, p, "change");
-    EXPECT_TRUE(restored.status() == WorkItem::AWAITING_APPROVAL && restored.signatures().size() == 1) << "Approvals: undo takes back just the last signature";
+    LeafTask& restored = leafOf(engine, p, "change");
+    EXPECT_TRUE(restored.status() == LeafTask::AWAITING_APPROVAL && restored.signatures().size() == 1) << "Approvals: undo takes back just the last signature";
     engine.approveAs(p, "change", "Olivia");
-    EXPECT_EQ(leafOf(engine, p, "change").status(), WorkItem::COMPLETED) << "Approvals: the owner can fill any slot";
+    EXPECT_EQ(leafOf(engine, p, "change").status(), LeafTask::COMPLETED) << "Approvals: the owner can fill any slot";
 
     std::string again = engine.startProject("Review", "", "");
     work(engine, again, "change");
@@ -215,7 +216,7 @@ TEST_F(ApprovalFlowTest, MultiApproval) {
     EXPECT_TRUE(leafOf(engine, again, "change").pendingApprovers().empty()) << "Approvals: requesting changes clears the slots";
 }
 
-std::string runToSignOff(Tividy& engine) {
+std::string runToSignOff(TividyMediator& engine) {
     std::string p = engine.startProject("Feature Delivery", "Dark mode", "BusyTeam");
     const char* order[] = { "spec", "api", "migration", "mockups", "ui", "tests", "code-review", "deploy" };
     for (int i = 0; i < 8; ++i) {
@@ -239,7 +240,7 @@ TEST_F(ApprovalFlowTest, SignOff) {
     issue.priority = "Urgent";
     std::vector<std::string> ids;
     {
-        Tividy::ActorScope as(engine, "Olivia");
+        TividyMediator::ActorScope as(engine, "Olivia");
         ids = engine.flagIssue(p, issue);
     }
     EXPECT_EQ(ids.size(), 2u) << "Sign-off: one issue task per team";
@@ -293,10 +294,10 @@ TEST_F(ApprovalFlowTest, UndoAndSnapshots) {
 
     work(engine, p, "spec");
     std::string text = engine.snapshot();
-    Tividy copy("Other");
+    TividyMediator copy("Other");
     copy.restore(text);
     EXPECT_EQ(copy.snapshot(), text) << "Snapshot: restoring into a new engine gives the same text";
-    EXPECT_TRUE(copy.instance(p).item("spec")->status() == WorkItem::AWAITING_APPROVAL) << "Snapshot: item states survive";
+    EXPECT_TRUE(copy.instance(p).item("spec")->status() == LeafTask::AWAITING_APPROVAL) << "Snapshot: item states survive";
     EXPECT_EQ(copy.approvalsFor("Maya").size(), 1u) << "Snapshot: approval routing survives";
     EXPECT_TRUE(copy.organisation().find("Tom")->load() == engine.organisation().find("Tom")->load() &&
           copy.organisation().find("Tom")->load() > 0) << "Snapshot: loads are worked out again";
@@ -321,7 +322,7 @@ TEST(ApprovalFlow, ScenarioFiles) {
     EXPECT_NE(blank.find("my-startup.txt"), std::string::npos) << "Scenario: file names come from the scenario name";
     EXPECT_NE(ScenarioStore::createBlank(dir, "My Startup!", "Other", "Zed").find("my-startup-2.txt"), std::string::npos) << "Scenario: an existing name is not overwritten";
 
-    Tividy engine("x");
+    TividyMediator engine("x");
     ActivityLog log(engine);
     engine.bus().attach(&log);
     ScenarioStore::load(blank, engine, &log);
@@ -334,7 +335,7 @@ TEST(ApprovalFlow, ScenarioFiles) {
     std::string p = engine.startProject("Blank board", "First", "");
     ScenarioStore::save(blank, engine, &log);
 
-    Tividy again("y");
+    TividyMediator again("y");
     ActivityLog log2(again);
     ScenarioStore::load(blank, again, &log2);
     EXPECT_TRUE(again.organisation().find("Sam") != nullptr && again.instanceIds().size() == 1) << "Scenario: saved changes load back";
@@ -356,10 +357,10 @@ TEST(ApprovalFlow, ScenarioFiles) {
 }
 
 TEST_F(ApprovalFlowTest, ProxyRules) {
-    SecuredTividy maya(engine, "Maya");
-    SecuredTividy tom(engine, "Tom");
-    SecuredTividy bob(engine, "Bob");
-    SecuredTividy olivia(engine, "Olivia");
+    SecuredMediator maya(engine, "Maya");
+    SecuredMediator tom(engine, "Tom");
+    SecuredMediator bob(engine, "Bob");
+    SecuredMediator olivia(engine, "Olivia");
     std::string p = maya.startProject("Feature Delivery", "Dark mode", "BusyTeam");
     tom.assign(p, "spec", "Tom");
     tom.start(p, "spec");
@@ -398,11 +399,11 @@ TEST_F(ApprovalFlowTest, ObserverUndo) {
     engine.undo();
     EXPECT_TRUE(engine.instanceIds().empty()) << "Undo: restoring a recorded step also drops later work nobody recorded, so keep a history attached";
 
-    Tividy shared("Acme");
+    TividyMediator shared("Acme");
     seed(shared);
-    SecuredTividy maya(shared, "Maya");
-    SecuredTividy tom(shared, "Tom");
-    SecuredTividy bob(shared, "Bob");
+    SecuredMediator maya(shared, "Maya");
+    SecuredMediator tom(shared, "Tom");
+    SecuredMediator bob(shared, "Bob");
     std::string q = maya.startProject("Feature Delivery", "Dark mode", "BusyTeam");
     tom.assign(q, "spec", "Tom");
     EXPECT_TRUE(tom.mayUndo() && !bob.mayUndo()) << "Undo: a worker can undo their own last action, others cannot";
@@ -449,7 +450,7 @@ TEST_F(ApprovalFlowTest, SignOffRules) {
     std::string legacyStrict = engine.startProject("outline", "", "", SignOffRule::Required);
     EXPECT_TRUE(engine.instance(legacyStrict).requiresSignOff()) << "Sign-off: but a legacy project can ask for it";
 
-    Tividy copy("x");
+    TividyMediator copy("x");
     copy.restore(engine.snapshot());
     EXPECT_TRUE(copy.instance(skipped).requiresSignOff() == false && copy.instance(forced).requiresSignOff() &&
           copy.definition("Feature Delivery").signOff) << "Sign-off: the rule survives the scenario file";
@@ -457,11 +458,11 @@ TEST_F(ApprovalFlowTest, SignOffRules) {
 
 TEST(ApprovalFlow, ReviewFixes) {
     ApprovalRequest routed("Reviewer");
-    ReviewerHandler reviewer;
+    RoleApprovalHandler reviewer("Reviewer");
     reviewer.handle(routed);
     EXPECT_TRUE(routed.isResolved() && routed.getPendingRole() == "Reviewer") << "Chain: a role handler answers with its role, and the engine waits for a person in that role";
 
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     seed(engine);
     std::string p = engine.startProject("Feature Delivery", "Dark mode", "BusyTeam");
     work(engine, p, "spec");
@@ -471,29 +472,29 @@ TEST(ApprovalFlow, ReviewFixes) {
     b.reset("Two");
     b.setPolicy("BusyTeam");
     b.addStructuredStage(StageTemplate("only", "Only"));
-    b.addStructuredItem("only", ItemTemplate("x", "Change", "Developer", "backend", "TechLead").alsoApprovedBy("Owner"));
+    b.addStructuredItem("only", TaskTemplate("x", "Change", "Developer", "backend", "TechLead").alsoApprovedBy("Owner"));
     engine.loadDefinition("Two", b.build());
     std::string q = engine.startProject("Two", "", "");
     work(engine, q, "x");
     EXPECT_TRUE(leafOf(engine, q, "x").pendingApprovers().size() == 2 &&
           leafOf(engine, q, "x").pendingApprovers()[1] == "Owner") << "Chain: the Owner handler routes owner approvals";
     {
-        Tividy::ActorScope as(engine, "Tom");
+        TividyMediator::ActorScope as(engine, "Tom");
         engine.approve(q, "x");
     }
-    EXPECT_TRUE(leafOf(engine, q, "x").status() == WorkItem::AWAITING_APPROVAL && leafOf(engine, q, "x").signatures().size() == 1) << "Proxy: approve() through the facade with a person signs one slot, like the proxy does";
+    EXPECT_TRUE(leafOf(engine, q, "x").status() == LeafTask::AWAITING_APPROVAL && leafOf(engine, q, "x").signatures().size() == 1) << "Proxy: approve() through the facade with a person signs one slot, like the proxy does";
 
     EXPECT_FALSE(leafOf(engine, p, "spec").hasData("assignScope")) << "Strategy: the pipeline no longer writes into the item";
     LeastLoadedAssignment least;
     RoleBasedAssignment first;
-    WorkItem probe("p", "Probe", "Developer");
+    LeafTask probe("p", "Probe", "Developer");
     probe.setData("unit", "frontend");
     TeamFirstPipeline teamFirst(engine.organisation(), least);
     CompanyWidePipeline wide(engine.organisation(), first);
-    EXPECT_EQ(teamFirst.choose(probe, "Developer").person->name(), "Fay") << "Bridge: the team-first pipeline keeps the strategy inside the item's team";
-    EXPECT_EQ(wide.choose(probe, "Developer").person, engine.organisation().eligible("Developer").front()) << "Bridge: the company-wide pipeline lets the strategy see everyone";
+    EXPECT_EQ(teamFirst.choose(probe.data(), "Developer").person->name(), "Fay") << "Bridge: the team-first pipeline keeps the strategy inside the item's team";
+    EXPECT_EQ(wide.choose(probe.data(), "Developer").person, engine.organisation().eligible("Developer").front()) << "Bridge: the company-wide pipeline lets the strategy see everyone";
     CompanyWidePipeline wideLeast(engine.organisation(), least);
-    EXPECT_EQ(wideLeast.choose(probe, "Developer").person, least.assign(probe, "Developer", engine.organisation().people())) << "Bridge: company-wide, the pipeline gives the same answer as the unchanged strategy on its own";
+    EXPECT_EQ(wideLeast.choose(probe.data(), "Developer").person, least.assign(probe.data(), "Developer", engine.organisation().people())) << "Bridge: company-wide, the pipeline gives the same answer as the unchanged strategy on its own";
 
     struct Throwing : public WorkflowObserver {
         void onEvent(const WorkflowEvent&) override { throw std::runtime_error("socket gone"); }
@@ -515,10 +516,11 @@ TEST(ApprovalFlow, ReviewFixes) {
     invoker.setLimit(2);
     WorkflowDefinition flat;
     flat.items.push_back("a");
-    WorkflowInstance inst("i", flat);
+    ProjectFacade projects;
+    WorkflowInstance& inst = adopt(projects, "i", flat);
     inst.start();
     for (int i = 0; i < 5; ++i) {
-        invoker.invoke(std::unique_ptr<WorkCommand>(new SetDataCommand(nullptr, "i", "a", "k", std::to_string(i))), &inst);
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, Request(Action::SetData, TaskRef("i", "a")).with("key", "k").with("value", std::to_string(i)))));
     }
     EXPECT_EQ(invoker.size(), 2u) << "Command: the invoker keeps a bounded history";
 }
@@ -561,19 +563,19 @@ TEST_F(ApprovalFlowTest, SubtaskBlockersCannotDeadlock) {
 
 TEST_F(ApprovalFlowTest, SequentialStagesHoldNewTasks) {
     std::string p = engine.startProject("Feature Delivery", "Dark mode", "SmallTeam");
-    EXPECT_EQ(leafOf(engine, p, "spec").status(), WorkItem::AVAILABLE) << "Sequential: the spec is the first item";
+    EXPECT_EQ(leafOf(engine, p, "spec").status(), LeafTask::AVAILABLE) << "Sequential: the spec is the first item";
     TaskSpec extra;
     extra.name = "Extra intake work";
     extra.stageId = "intake";
     std::string id = engine.addTask(p, extra);
-    EXPECT_EQ(leafOf(engine, p, id).status(), WorkItem::CREATED) << "Sequential: a task added behind the spec waits its turn";
+    EXPECT_EQ(leafOf(engine, p, id).status(), LeafTask::CREATED) << "Sequential: a task added behind the spec waits its turn";
     work(engine, p, "spec");
     signAll(engine, p, "spec");
-    EXPECT_NE(leafOf(engine, p, id).status(), WorkItem::CREATED) << "Sequential: it opens (and goes down the pipeline) once the spec is done";
+    EXPECT_NE(leafOf(engine, p, id).status(), LeafTask::CREATED) << "Sequential: it opens (and goes down the pipeline) once the spec is done";
 
     std::string q = engine.startProject("Feature Delivery", "Search", "BusyTeam");
     std::string parallel = engine.addTask(q, extra);
-    EXPECT_NE(leafOf(engine, q, parallel).status(), WorkItem::CREATED) << "Parallel: a new task opens straight away";
+    EXPECT_NE(leafOf(engine, q, parallel).status(), LeafTask::CREATED) << "Parallel: a new task opens straight away";
 }
 
 TEST_F(ApprovalFlowTest, ScenarioWithABadStageIsRefused) {
@@ -610,11 +612,11 @@ TEST_F(ApprovalFlowTest, ProxyMatchesThePermissionsTable) {
     engine.organisation().find("Tom")->setAvailable(false);
     std::string id = engine.addTask(p, backendLead);
     engine.organisation().find("Tom")->setAvailable(true);
-    ASSERT_EQ(leafOf(engine, p, id).status(), WorkItem::AVAILABLE);
-    SecuredTividy tom(engine, "Tom");
+    ASSERT_EQ(leafOf(engine, p, id).status(), LeafTask::AVAILABLE);
+    SecuredMediator tom(engine, "Tom");
     EXPECT_NO_THROW(tom.assign(p, id, "Tom")) << "Proxy: Tom in Engineering may take work aimed at Back-end, a team under his";
 
-    SecuredTividy bob(engine, "Bob");
+    SecuredMediator bob(engine, "Bob");
     TaskSpec spec;
     spec.name = "Approve it myself";
     spec.approverRoles.push_back("Auto");
@@ -623,7 +625,7 @@ TEST_F(ApprovalFlowTest, ProxyMatchesThePermissionsTable) {
     EXPECT_NO_THROW(tom.addSubtask(p, id, spec)) << "Proxy: but may add one that is approved like its parent";
 
     work(engine, p, "spec");
-    SecuredTividy olivia(engine, "Olivia");
+    SecuredMediator olivia(engine, "Olivia");
     EXPECT_NO_THROW(olivia.withdraw(p, "spec")) << "Proxy: the owner may take back anyone's work, like a manager";
     EXPECT_THROW(bob.withdraw(p, "spec"), AccessDenied) << "Proxy: a worker may not";
 }

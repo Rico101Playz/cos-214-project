@@ -25,95 +25,103 @@ The primary demonstration scenario is **Software Feature Delivery**: a mid-sized
 ## Build & Run
 
 ### Prerequisites
-To build and run this project, you will need:
-* **C++ Compiler:** GCC, Clang, or MSVC supporting C++11 standard.
-* **CMake:** Version 3.10 or higher.
-* **Build Tool:** Make.
+* **C++ compiler** with C++11 support (GCC, Clang or MSVC).
+* **CMake** 3.18 or newer, and a build tool it can drive (Make or Ninja).
+* GoogleTest and civetweb ship in `third_party/`; nothing else needs installing.
 
-### Build Instructions
-This project uses CMake to maintain build separation and enforce standard compliance.
+### Build
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
 
-1. Create and enter a build directory in the root of the project:
-   ```bash
-   mkdir build && cd build
-   ```
-2. Generate build files using CMake pointing to the project root:
-   ```bash
-   cmake ..
-   ```
-3. Compile the code:
-   ```bash
-   make
-   ```
+This produces three programs in `build/`:
 
-Compiling produces two executables inside the `build/` directory:
-* `TIVIDY_App`: The main interactive application.
-* `TIVIDY_Tests`: The automated unit test suite.
+| Program | What it is |
+| --- | --- |
+| `TIVIDY_Server` | The website: serves `web/` and talks to the browser over a WebSocket. |
+| `TIVIDY_App` | The console version of the same engine. |
+| `TIVIDY_Tests` | The GoogleTest suite. |
 
----
+### Run
+```bash
+./TIVIDY_Server --ports 8080
+```
+It lists the saved scenarios in `scenarios/` and asks which to open; `--scenario ../scenarios/acme-software.txt`
+opens one straight away. Then open `http://localhost:8080/`. `--web` and `--scenarios` point at other copies of
+`web/` and `scenarios/`. `DOCKER.md` describes running everything in Docker instead.
 
-### Run Instructions
-
-> **Note:** Ensure you are executing commands from inside the `build/` directory.
-
-#### Running the Application
-To start the interactive TIVIDY workflow system:
 ```bash
 ./TIVIDY_App
 ```
+is the console version; it takes the same `--scenarios` and `--scenario` options.
 
-#### Running Automated Tests
-The project includes a custom automated test runner validating the core engine logic and design patterns:
+### Tests
 ```bash
 ./TIVIDY_Tests
 ```
-* **Output:** Displays `[PASS]` or `[FAIL]` status per test case with a concluding summary.
-* **Exit Codes:** Returns `0` if all tests pass; `1` on any failure.
+or `ctest` from `build/`. `docs/TESTING.md` explains what each test file covers.
 
 ---
 
 ## Repository Structure
 
+Code is grouped by the design pattern it belongs to; `include/<folder>/X.h` pairs with `src/<folder>/X.cpp`.
+
 ```text
 cos-214-project/
-├── CMakeLists.txt              # CMake build configuration
-├── README.md                   # Project overview and documentation
-├── include/                    # Public Header Files (.h)
-│   ├── core/                   # Workflow engine core (WorkflowInstance, WorkItem)
-│   ├── patterns/               # GoF Design Patterns categorized
-│   │   ├── creation/           # Builder, Factory, Singleton
-│   │   ├── execution/          # Command, Memento, Observer, State
-│   │   └── structural/         # Adapter, Facade, Proxy, Composite, Decorator
-│   └── industries/             # Industry-specific rules & extensions
-├── src/                        # Implementation Files (.cpp)
-│   ├── core/                   # Core engine implementation
-│   ├── patterns/               # Pattern implementations
-│   └── industries/             # Industry rules implementation
-├── tests/                      # Automated Unit Test Suite
-│   ├── main_test.cpp           # Custom test runner main entry
-│   ├── test_utils.h / .cpp     # Shared testing utilities
-│   ├── commandUnitTest.cpp     # Command pattern tests
-│   ├── builderUnitTest.cpp     # Builder pattern tests
-│   ├── compositeUnitTest.cpp   # Work tree (WorkNode, CompositeStage, WorkItem lifecycle) tests
-│   ├── iteratorUnitTest.cpp    # Iterator pattern tests
-│   ├── workflowInstanceUnitTest.cpp # WorkflowInstance (running a definition) tests
-│   └── facadeUnitTest.cpp      # Facade (Tividy) tests
-└── docs/                       # Project Documentation
-    ├── diagrams/               # Activity, class, sequence, and state diagrams
-    ├── research/               # Research findings and references
-    └── revisions/              # Design decision records and revision history
+├── CMakeLists.txt
+├── include/ and src/
+│   ├── mediator/               # Mediator, TividyMediator, Colleague, Request, Response, Action, TaskRef
+│   ├── proxy/                  # SecuredMediator: the permission check in front of the mediator
+│   ├── facade/                 # ProjectFacade, OrgFacade, HistoryFacade (the colleagues)
+│   ├── command/                # Command, RequestCommand, CommandInvoker, CommandHistory, UndoHistory
+│   ├── memento/                # Memento, EngineMemento, SnapshotStore
+│   ├── observer/               # EventBus, WorkflowEvent, WorkflowObserver
+│   ├── composite/              # Task, TaskNode, CompositeTask, LeafTask (the work tree)
+│   ├── decorator/              # TaskDecorator, ApprovalWork, BlockedWork, ValidatedWork
+│   ├── iterator/               # WorkIterator, DepthFirstIterator, FilterIterator, TaskFilter
+│   ├── state/                  # TaskState and one class per task status
+│   ├── strategy/               # Assignment strategies and pipelines, stage modes
+│   ├── chain_of_responsibility/# Approval handlers
+│   ├── abstract_factory/       # WorkflowFactory per policy, PolicyCatalog
+│   ├── builder/                # Definition builder and directors
+│   ├── org_composite/          # Company, OrgUnit, Participant (the organisation tree)
+│   ├── core/                   # WorkflowDefinition, WorkflowInstance, Organisation
+│   ├── server/                 # Website back end: sessions, request reading, views, scenarios
+│   └── net/                    # The web server program (civetweb)
+├── tests/                      # GoogleTest suite
+├── web/                        # The website
+├── scenarios/                  # Saved companies and projects
+├── third_party/                # googletest, civetweb
+└── docs/
 ```
+
+---
+
+## How a Request Flows
+
+Every change, from the website, the console or a test, is a `Request` sent to the mediator.
+
+1. **Website:** `SessionHub` hands the browser's JSON to `RequestReader`, which turns it into a `Request` (action, project and task, actor, arguments).
+2. **Proxy:** the session's `SecuredMediator` checks the actor may do it, then passes it on. `Mediator::send` turns any refusal into a `Response` code (`forbidden`, `invalid`, `not_allowed_now`).
+3. **Mediator:** `TividyMediator` coordinates. It checks what spans facades (for example, that a unit exists in the organisation), opens an undo step (a whole-engine `EngineMemento`), and runs each change as a `RequestCommand` through its `CommandInvoker`.
+4. **Colleague:** the command's receiver is `ProjectFacade`. Its `handle(request)` either builds a new task with the project's factory, or acts on the project, or hands the `Request` to the outermost decorator of the named task: `BlockedWork` → `ValidatedWork` → `ApprovalWork` → `LeafTask`, whose `TaskState` decides whether the action is allowed.
+5. **Back to the mediator:** `ProjectFacade` reports the change with `notify`. When work moved on or off someone's desk, the mediator updates the people's loads in `OrgFacade`. When work needs a person, it asks `OrgFacade::choose` (the policy's assignment strategy) and sends `ProjectFacade` an `Assign`.
+6. **Events:** the mediator publishes `WorkflowEvent`s on the `EventBus`; the website's observers turn them into the activity feed and refresh every open page.
+
+Organisation changes go to `OrgFacade::handle`, and undo and redo go to `HistoryFacade::handle`, the same way. The three facades never refer to each other. Between them they share only the mediator's protocol classes: `Colleague`, `Request`, `Response`, `Action`, `TaskRef` and `Memento`.
 
 ---
 
 ## How the Build System Works
 
-The `CMakeLists.txt` configuration streamlines cross-platform development:
-
-1. **Enforce C++11:** Sets `CMAKE_CXX_STANDARD` to 11 to guarantee specification compliance.
-2. **Clean Include Paths:** Adds `include/` to the compiler search path, allowing clean syntax (e.g., `#include "patterns/execution/WorkCommand.h"`) rather than complex relative paths.
-3. **Automated Source Discovery:** Uses `GLOB_RECURSE` to automatically detect `.cpp` source files in `src/`. *Re-run `cmake ..` whenever a new file is added.*
-4. **Isolated Test Executable:** Explicitly excludes the main application entry point (`src/main.cpp`) when building `TIVIDY_Tests` to avoid `main()` symbol collisions.
+* **C++11** is enforced (`CMAKE_CXX_STANDARD 11`, no extensions).
+* `include/` is on the include path, so headers are included by folder: `#include "decorator/ApprovalWork.h"`.
+* **Engine** (`tividy_engine`): every `src/**/*.cpp` except `src/server/`, `src/net/` and `src/main.cpp`, found with `GLOB_RECURSE ... CONFIGURE_DEPENDS`, so new files are picked up on the next build.
+* **Service** (`tividy_service`): `src/server/`, on top of the engine. `TIVIDY_App`, `TIVIDY_Server` and `TIVIDY_Tests` all link it.
+* **Tests:** every `tests/*.cpp`, linked with GoogleTest's `gtest_main` and registered with CTest.
 
 ---
 
@@ -132,9 +140,8 @@ The `CMakeLists.txt` configuration streamlines cross-platform development:
 
 ### Out of Scope
 * Business domain work execution
-* User interfaces (GUI/Web UI)
-* Authentication systems
-* Network protocols and persistent disk databases (handled in-memory for demonstrations)
+* Authentication systems (people choose who they are on the website; permissions are enforced, identity is not)
+* Persistent databases (scenarios are saved as text files)
 * Internal mechanisms of external systems
 
 > **Data Separation Principle:** Definition data (structure, rules, roles) is strictly separated from instance data (live work tree, item states, history). Running workflow instances retain the specific definition version active at their creation time.
@@ -145,18 +152,20 @@ The `CMakeLists.txt` configuration streamlines cross-platform development:
 
 | Pattern | Problem Solved in TIVIDY | Key Classes |
 | :--- | :--- | :--- |
-| **Facade** | Unified interface over core engine subsystems | `Tividy` |
-| **Composite** | Nesting stages, tasks, and sub-processes hierarchically | `WorkNode`, `CompositeStage`, `LeafWorkItem` |
-| **Iterator** | Traversing the work tree in specific operational orders | `WorkIterator`, `DepthFirstIterator`, `ReadyOnlyIterator` |
-| **State** | Managing task lifecycles and enforcing valid transitions | `WorkItem`, `WorkItemState`, `CreatedState`, `AvailableState`, `AssignedState`, `InProgressState`, `AwaitingApprovalState`, `CompletedState`, `RejectedState`, `CancelledState`, `EscalatedState` |
-| **Decorator** | Adding dynamic task behaviors (validation, dynamic priority, auditing) | `WorkItemDecorator`, `ValidatedWork`, `PriorityWork`, `AuditedWork`, `NotifiedWork`, `SecuredWork` |
-| **Strategy** | Swappable work item assignment strategies | `AssignmentStrategy`, `RoleBasedAssignment`, `LeastLoadedAssignment`, `RuleBasedAssignment` |
-| **Chain of Responsibility** | Multi-level approval routing and escalation chains | `ApprovalHandler`, `AutoApproveHandler`, `ReviewerHandler`, `TechLeadHandler`, `ReleaseManagerHandler` |
-| **Abstract Factory** | Instantiating consistent families of workflow elements | `WorkflowFactory`, `FactoryWorkflowFactory`, `StartupPolicyFactory`, `OnboardingFactory` |
-| **Builder** | Step-by-step assembly of complex workflow definitions | `WorkflowBuilder`, `ConcreteDefinitionBuilder`, `FeatureDeliveryProcess` |
-| **Command** | Encapsulating operations to enable execution logging and undo | `WorkCommand`, `AssignCommand`, `StartCommand`, `CompleteCommand`, `ApproveCommand`, `RejectCommand`, `EscalateCommand`, `InvokeCommand`, `CancelCommand` |
-| **Memento** | Capturing state snapshots to support rollbacks to checkpoints | `WorkflowInstance`, `InstanceMemento`, `SnapshotStore` |
-| **Observer** | Decoupling state change reactions and notifications from core logic | `EventBus`, `WorkflowObserver`, `ActivityFeed`, `Notifier`, `MetricsCollector`, `AutomationRule` |
+| **Mediator** | One place coordinates projects, people and history, so none of them know each other | `Mediator`, `TividyMediator`, `Colleague` |
+| **Facade** | A simple front over each part of the engine | `ProjectFacade`, `OrgFacade`, `HistoryFacade` |
+| **Proxy** | Checking permissions before a request reaches the engine | `SecuredMediator` |
+| **Command** | Every change is an object that can be run, recorded and undone | `Command`, `RequestCommand`, `CommandInvoker`, `CommandHistory` |
+| **Memento** | Snapshots for undo, redo and saving scenarios | `Memento`, `EngineMemento`, `SnapshotStore`, `UndoHistory` |
+| **Observer** | Telling the website and the history what happened | `EventBus`, `WorkflowEvent`, `WorkflowObserver` |
+| **Composite** | Projects, stages, tasks and sub-tasks as one tree; the organisation as another | `Task`, `TaskNode`, `CompositeTask`, `LeafTask`; `OrgComponent`, `OrgUnit`, `OrgMember` |
+| **Decorator** | Approval, blockers and required fields wrap a task and see each request first | `TaskDecorator`, `ApprovalWork`, `BlockedWork`, `ValidatedWork` |
+| **Iterator** | Walking the work tree, optionally filtered | `WorkIterator`, `DepthFirstIterator`, `FilterIterator`, `TaskFilter` |
+| **State** | Task lifecycles and which actions each status allows | `TaskState`, `CreatedState`, `AvailableState`, `AssignedState`, `InProgressState`, `AwaitingApprovalState`, `CompletedState`, `RejectedState`, `CancelledState`, `EscalatedState` |
+| **Strategy** | Swappable assignment rules per policy, and how a stage releases its work | `AssignmentStrategy`, `RoleBasedAssignment`, `LeastLoadedAssignment`, `RuleBasedAssignment`, `AssignmentService`; `StageMode`, `ParallelMode`, `SequentialMode` |
+| **Chain of Responsibility** | Routing an approval to the right role | `ApprovalHandler`, `OwnerHandler`, `PolicyChainHandler`, `RoleApprovalHandler`, `AutoApproveHandler`, `TimeoutEscalationHandler`, `ManagerFallbackHandler` |
+| **Abstract Factory** | Consistent stages, tasks and approval chains per policy | `WorkflowFactory`, `SmallTeamFactory`, `BusyTeamFactory`, `HighRiskFactory`, `PolicyCatalog` |
+| **Builder** | Step-by-step assembly of workflow definitions | `WorkflowBuilder`, `ConcreteDefinitionBuilder`, `FeatureDeliveryDirector`, `OutlineDirector` |
 
 ---
 

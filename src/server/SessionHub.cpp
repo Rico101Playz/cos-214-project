@@ -2,9 +2,9 @@
 #include "server/ViewBuilder.h"
 #include "server/ActivityLog.h"
 #include <iostream>
-#include "patterns/structural/Tividy.h"
+#include "mediator/TividyMediator.h"
 
-SessionHub::SessionHub(Tividy& engine, ActivityLog* log, std::function<void()> onChange)
+SessionHub::SessionHub(TividyMediator& engine, ActivityLog* log, std::function<void()> onChange)
     : engine_(engine), pipeline_(engine), nextId_(1), log_(log), onChange_(onChange),
       seenVersion_(log != nullptr ? log->version() : 0) {}
 
