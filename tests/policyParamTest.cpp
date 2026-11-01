@@ -4,17 +4,17 @@
 #include <string>
 #include <vector>
 
-#include "patterns/creation/PolicyCatalog.h"
-#include "patterns/execution/DepthFirstIterator.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/Tividy.h"
+#include "abstract_factory/PolicyCatalog.h"
+#include "iterator/DepthFirstIterator.h"
+#include "composite/LeafTask.h"
+#include "mediator/TividyMediator.h"
 #include "server/DemoSeed.h"
 
 namespace {
 
 class PolicyTest : public ::testing::TestWithParam<std::string> {
 protected:
-    Tividy engine;
+    TividyMediator engine;
 
     PolicyTest() : engine("Acme") {}
 
@@ -40,18 +40,18 @@ protected:
         std::vector<std::string> ids;
         DepthFirstIterator it(&engine.instance(project).root());
         for (it.first(); !it.isDone(); it.next()) {
-            if (dynamic_cast<LeafWorkItem*>(it.currentItem()) != nullptr) ids.push_back(it.currentItem()->id());
+            if (leafOf(it.currentItem()) != nullptr) ids.push_back(it.currentItem()->id());
         }
         for (std::size_t i = 0; i < ids.size(); ++i) {
             const std::string status = engine.instance(project).item(ids[i])->status();
-            if (status == WorkItem::AVAILABLE) {
+            if (status == LeafTask::AVAILABLE) {
                 engine.autoAssign(project, ids[i]);
                 moved = true;
-            } else if (status == WorkItem::ASSIGNED) {
+            } else if (status == LeafTask::ASSIGNED) {
                 engine.start(project, ids[i]);
                 engine.complete(project, ids[i]);
                 moved = true;
-            } else if (status == WorkItem::AWAITING_APPROVAL) {
+            } else if (status == LeafTask::AWAITING_APPROVAL) {
                 std::string signer = approverFor(project, ids[i]);
                 if (!signer.empty()) {
                     engine.approveAs(project, ids[i], signer);

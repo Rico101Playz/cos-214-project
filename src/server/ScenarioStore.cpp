@@ -1,7 +1,7 @@
 #include "server/ScenarioStore.h"
 #include "server/ActivityLog.h"
 #include "server/DemoSeed.h"
-#include "patterns/structural/Tividy.h"
+#include "mediator/TividyMediator.h"
 #include "core/TextRecord.h"
 
 #include <algorithm>
@@ -121,7 +121,7 @@ std::vector<ScenarioInfo> ScenarioStore::list(const std::string& directory) {
     return found;
 }
 
-void ScenarioStore::load(const std::string& path, Tividy& engine, ActivityLog* log) {
+void ScenarioStore::load(const std::string& path, TividyMediator& engine, ActivityLog* log) {
     std::string text = readFile(path);
     engine.restore(text);
     std::vector<std::string> wanted;
@@ -144,7 +144,7 @@ void ScenarioStore::load(const std::string& path, Tividy& engine, ActivityLog* l
     }
 }
 
-void ScenarioStore::save(const std::string& path, const Tividy& engine, const ActivityLog* log) {
+void ScenarioStore::save(const std::string& path, const TividyMediator& engine, const ActivityLog* log) {
     std::string text = "# TIVIDY scenario. Saved automatically after every change.\n";
     text += engine.snapshot();
     if (log != nullptr) {
@@ -185,7 +185,7 @@ std::string ScenarioStore::createBlank(const std::string& directory, const std::
     for (int n = 2; exists(path); ++n) {
         path = join(directory, base + "-" + std::to_string(n) + ".txt");
     }
-    Tividy engine(company);
+    TividyMediator engine(company);
     engine.addPerson(owner, "Owner", "org");
     DemoSeed::templates(engine);
     save(path, engine, nullptr);

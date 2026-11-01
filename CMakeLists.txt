@@ -13,7 +13,9 @@ find_package(Threads REQUIRED)
 # 3. Tell CMake where headers are 
 include_directories(include)
 
-file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/core/*.cpp" "src/patterns/*.cpp")
+# The engine is every source folder except the server, the web server and the two mains.
+file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+list(FILTER ENGINE_SOURCES EXCLUDE REGEX "/src/(server|net)/|/src/main\\.cpp$")
 add_library(tividy_engine STATIC ${ENGINE_SOURCES})
 
 file(GLOB_RECURSE SERVICE_SOURCES CONFIGURE_DEPENDS "src/server/*.cpp")

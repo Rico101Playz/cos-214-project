@@ -8,10 +8,9 @@
 #include <vector>
 
 #include "core/WorkflowDefinition.h"
-#include "core/WorkItem.h"
-#include "patterns/execution/WorkIterator.h"
-#include "patterns/structural/CompositeStage.h"
-#include "patterns/structural/LeafWorkItem.h"
+#include "iterator/WorkIterator.h"
+#include "composite/CompositeTask.h"
+#include "composite/LeafTask.h"
 
 // ---- exception helpers (C++11 lambdas) ----
 template <typename F>
@@ -42,22 +41,22 @@ inline bool throwsInvalidArgument(F action) {
 inline bool nearly(double a, double b) { return std::fabs(a - b) < 1e-9; }
 
 // ---- tree-building helpers ----
-inline LeafWorkItem* addLeaf(CompositeStage& stage, const std::string& id,
+inline LeafTask* addLeaf(CompositeTask& stage, const std::string& id,
                              const std::string& role = "Developer") {
-    LeafWorkItem* leaf = new LeafWorkItem(id, id, role);
-    stage.add(std::unique_ptr<WorkNode>(leaf));
+    LeafTask* leaf = new LeafTask(id, id, role);
+    stage.add(std::unique_ptr<Task>(leaf));
     return leaf;
 }
 
-inline CompositeStage* addSubStage(CompositeStage& parent, const std::string& id) {
-    CompositeStage* sub = new CompositeStage(id, id);
-    parent.add(std::unique_ptr<WorkNode>(sub));
+inline CompositeTask* addSubStage(CompositeTask& parent, const std::string& id) {
+    CompositeTask* sub = new CompositeTask(id, id);
+    parent.add(std::unique_ptr<Task>(sub));
     return sub;
 }
 
 // Drives an item (Created or Available) all the way to Completed.
-inline void finishItem(WorkItem& item) {
-    if (item.status() == WorkItem::CREATED) item.makeAvailable();
+inline void finishItem(LeafTask& item) {
+    if (item.status() == LeafTask::CREATED) item.makeAvailable();
     item.assign("tester");
     item.start();
     item.complete();

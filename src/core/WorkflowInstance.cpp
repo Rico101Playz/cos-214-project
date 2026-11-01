@@ -1,9 +1,11 @@
 #include "core/WorkflowInstance.h"
-#include "patterns/creation/StateFactory.h"
-#include "patterns/execution/CreatedInstance.h"
-#include "patterns/execution/DepthFirstIterator.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/creation/WorkflowFactory.h"
+#include "decorator/ApprovalWork.h"
+#include "decorator/BlockedWork.h"
+#include "decorator/ValidatedWork.h"
+#include "state/StateFactory.h"
+#include "iterator/DepthFirstIterator.h"
+#include "composite/LeafTask.h"
+#include "abstract_factory/WorkflowFactory.h"
 
 #include <stdexcept>
 #include <utility>
@@ -21,28 +23,29 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
                                    const WorkflowDefinition& definition)
     : id_(id),
       definition_(definition),
-      root_(new CompositeStage(id, definition.name)),
-      instanceState_(new CreatedInstance()),
-      state_(instanceState_->name()),
+      root_(new CompositeTask(id, definition.name)),
+      started_(false),
+      cancelled_(false),
+      signedOff_(false),
       currentStage_(0),
       name_(definition.name),
       requiresSignOff_(false)
 {
-    // One CompositeStage per declared stage.
+    // One CompositeTask per declared stage.
     for (std::size_t i = 0; i < definition_.stages.size(); ++i) {
         const std::string& stage = definition_.stages[i];
-        root_->add(std::unique_ptr<WorkNode>(new CompositeStage(stage, stage)));
+        root_->add(std::unique_ptr<Task>(new CompositeTask(stage, stage)));
     }
 
     // Items go into the first stage, or straight under the root when the
     // definition has no stages.
-    CompositeStage* target = root_.get();
+    CompositeTask* target = root_.get();
     if (root_->childCount() > 0) {
-        target = static_cast<CompositeStage*>(root_->child(0));
+        target = static_cast<CompositeTask*>(root_->child(0));
     }
     for (std::size_t i = 0; i < definition_.items.size(); ++i) {
         const std::string& it = definition_.items[i];
-        target->add(std::unique_ptr<WorkNode>(new LeafWorkItem(it, it, "")));
+        target->add(decorateProjectTask(std::unique_ptr<Task>(new LeafTask(it, it, ""))));
     }
 }
 
@@ -53,8 +56,9 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
     : id_(id),
       definition_(definition),
       root_(factory.createStage(id, title.empty() ? definition.name : title)),
-      instanceState_(new CreatedInstance()),
-      state_(instanceState_->name()),
+      started_(false),
+      cancelled_(false),
+      signedOff_(false),
       currentStage_(0),
       name_(title.empty() ? definition.name : title),
       requiresSignOff_(false)
@@ -62,34 +66,35 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
     definition_.stages.clear();
     for (std::size_t i = 0; i < definition.layout.size(); ++i) {
         const StageTemplate& spec = definition.layout[i];
-        CompositeStage* parent = root_.get();
+        CompositeTask* parent = root_.get();
         if (!spec.parent.empty()) {
-            parent = dynamic_cast<CompositeStage*>(root_->find(spec.parent));
+            parent = stageOf(root_->find(spec.parent));
             if (parent == nullptr) {
                 throw std::invalid_argument("Unknown parent stage: " + spec.parent);
             }
         } else {
             definition_.stages.push_back(spec.id);
         }
-        parent->add(std::unique_ptr<WorkNode>(factory.createStage(spec.id, spec.name).release()));
+        parent->add(std::unique_ptr<Task>(factory.createStage(spec.id, spec.name).release()));
     }
 
     for (std::size_t i = 0; i < definition.templates.size(); ++i) {
-        const ItemTemplate& spec = definition.templates[i];
-        std::unique_ptr<LeafWorkItem> leaf = factory.createWorkItem(spec.id, spec.name, spec.role);
-        leaf->setApproverRoles(spec.approverRoles);
+        const TaskTemplate& spec = definition.templates[i];
+        std::unique_ptr<Task> task = factory.createWorkItem(spec.id, spec.name, spec.role);
+        LeafTask* leaf = task->leaf();
+        task->approvalWork()->setApproverRoles(spec.approverRoles);
         leaf->setPriority(spec.priority.empty() ? std::string("Medium") : spec.priority);
         if (!spec.unit.empty()) leaf->setUnit(spec.unit);
         for (std::size_t b = 0; b < spec.blockedBy.size(); ++b) {
-            leaf->addBlocker(spec.blockedBy[b]);
+            task->blockedWork()->addBlocker(spec.blockedBy[b]);
         }
-        CompositeStage* stage = spec.stage.empty()
+        CompositeTask* stage = spec.stage.empty()
             ? root_.get()
-            : dynamic_cast<CompositeStage*>(root_->find(spec.stage));
+            : stageOf(root_->find(spec.stage));
         if (stage == nullptr) {
             throw std::invalid_argument("Unknown stage for item " + spec.id + ": " + spec.stage);
         }
-        stage->add(std::unique_ptr<WorkNode>(leaf.release()));
+        stage->add(std::move(task));
     }
 }
 
@@ -98,43 +103,48 @@ WorkflowInstance::WorkflowInstance(const std::string& id,
 // ---------------------------------------------------------
 const std::string& WorkflowInstance::id() const                { return id_; }
 const std::string& WorkflowInstance::title() const             { return definition_.name; }
-const std::string& WorkflowInstance::state() const             { return state_; }
+std::string WorkflowInstance::state() const {
+    if (cancelled_) return CANCELLED;
+    if (!started_) return CREATED;
+    if (!root_->isComplete()) return RUNNING;
+    return requiresSignOff_ && !signedOff_ ? AWAITING_SIGNOFF : COMPLETED;
+}
 const std::string& WorkflowInstance::reason() const            { return reason_; }
 const WorkflowDefinition& WorkflowInstance::definition() const { return definition_; }
 const std::string& WorkflowInstance::name() const              { return name_; }
 std::size_t WorkflowInstance::currentStageIndex() const        { return currentStage_; }
-CompositeStage& WorkflowInstance::root() const                 { return *root_; }
+CompositeTask& WorkflowInstance::root() const                 { return *root_; }
 
-WorkNode* WorkflowInstance::currentStage() const {
-    if (state_ != RUNNING) return nullptr;
+Task* WorkflowInstance::currentStage() const {
+    if (state() != RUNNING) return nullptr;
     if (definition_.stages.empty()) return root_.get();
     return root_->child(currentStage_);
 }
 
-WorkNode* WorkflowInstance::find(const std::string& nodeId) const {
+Task* WorkflowInstance::find(const std::string& nodeId) const {
     return root_->find(nodeId);
 }
 
-WorkItem* WorkflowInstance::item(const std::string& itemId) const {
-    return dynamic_cast<WorkItem*>(root_->find(itemId));
+LeafTask* WorkflowInstance::item(const std::string& itemId) const {
+    return leafOf(root_->find(itemId));
 }
 
 // ---------------------------------------------------------
 // Stage release / activation
 // ---------------------------------------------------------
-void WorkflowInstance::release(WorkNode* stage) {
+void WorkflowInstance::release(Task* stage) {
     DepthFirstIterator it(stage);
     for (it.first(); !it.isDone(); it.next()) {
-        WorkItem* work = dynamic_cast<WorkItem*>(it.currentItem());
-        if (work != nullptr && work->status() == WorkItem::CREATED) {
+        LeafTask* work = leafOf(it.currentItem());
+        if (work != nullptr && work->status() == LeafTask::CREATED) {
             work->makeAvailable();
         }
     }
 }
 
-void WorkflowInstance::activateStage(WorkNode* node) {
+void WorkflowInstance::activateStage(Task* node) {
     if (node == nullptr) return;
-    CompositeStage* stage = dynamic_cast<CompositeStage*>(node);
+    CompositeTask* stage = stageOf(node);
     if (stage != nullptr) {
         stage->activate();      // stage's mode decides parallel/sequential
     } else {
@@ -143,13 +153,8 @@ void WorkflowInstance::activateStage(WorkNode* node) {
 }
 
 // ---------------------------------------------------------
-// State plumbing (used by InstanceState subclasses)
+// Stage progress
 // ---------------------------------------------------------
-void WorkflowInstance::setState(std::unique_ptr<InstanceState> next) {
-    instanceState_ = std::move(next);
-    state_ = instanceState_->name();
-}
-
 void WorkflowInstance::setReason(const std::string& reason) { reason_ = reason; }
 
 void WorkflowInstance::openFirstStage() {
@@ -168,25 +173,49 @@ bool WorkflowInstance::stagesFinished() {
 }
 
 // ---------------------------------------------------------
-// Lifecycle — polymorphic dispatch
+// Lifecycle
 // ---------------------------------------------------------
-void WorkflowInstance::start()   { instanceState_->start(*this); }
-void WorkflowInstance::advance() { instanceState_->advance(*this); }
+static void illegal(const char* operation, const std::string& state) {
+    throw std::logic_error(std::string("Illegal instance operation: ") + operation +
+                           "() is not allowed in state '" + state + "'");
+}
+
+void WorkflowInstance::start() {
+    if (state() != CREATED) illegal("start", state());
+    started_ = true;
+    openFirstStage();
+    advance();
+}
+
+void WorkflowInstance::advance() {
+    if (started_ && !cancelled_) stagesFinished();
+}
+
 void WorkflowInstance::cancel(const std::string& reason) {
-    instanceState_->cancel(*this, reason);
+    std::string now = state();
+    if (now == COMPLETED || now == CANCELLED) illegal("cancel", now);
+    root_->cancel();
+    reason_ = reason;
+    cancelled_ = true;
+}
+
+void WorkflowInstance::setStatus(const std::string& state) {
+    started_ = state != CREATED;
+    cancelled_ = state == CANCELLED;
+    signedOff_ = state == COMPLETED;
 }
 
 // ---------------------------------------------------------
 // Per-item operations — the Command classes' receiver side.
 //
 // Each one finds the target item and delegates the operation to the
-// polymorphic WorkItemState (via LeafWorkItem). If the current state
+// polymorphic TaskState (via LeafTask). If the current state
 // refuses the transition, the state throws std::logic_error; we catch
 // it and return false so commands can decide how to report failure.
 // ---------------------------------------------------------
 bool WorkflowInstance::assignItem(const std::string& itemId,
                                   const std::string& participantName) {
-    WorkItem* it = item(itemId);
+    LeafTask* it = item(itemId);
     if (it == nullptr) return false;
     try {
         it->assign(participantName);
@@ -197,7 +226,7 @@ bool WorkflowInstance::assignItem(const std::string& itemId,
 }
 
 bool WorkflowInstance::startItem(const std::string& itemId) {
-    WorkItem* it = item(itemId);
+    LeafTask* it = item(itemId);
     if (it == nullptr) return false;
     try {
         it->start();
@@ -208,7 +237,7 @@ bool WorkflowInstance::startItem(const std::string& itemId) {
 }
 
 bool WorkflowInstance::completeItem(const std::string& itemId) {
-    WorkItem* it = item(itemId);
+    LeafTask* it = item(itemId);
     if (it == nullptr) return false;
     try {
         it->complete();
@@ -221,7 +250,7 @@ bool WorkflowInstance::completeItem(const std::string& itemId) {
 bool WorkflowInstance::approveItem(const std::string& itemId,
                                    bool approved,
                                    const std::string& comment) {
-    WorkItem* it = item(itemId);
+    LeafTask* it = item(itemId);
     if (it == nullptr) return false;
     try {
         if (approved) {
@@ -237,7 +266,7 @@ bool WorkflowInstance::approveItem(const std::string& itemId,
 
 bool WorkflowInstance::rejectItem(const std::string& itemId,
                                   const std::string& reason) {
-    WorkItem* it = item(itemId);
+    LeafTask* it = item(itemId);
     if (it == nullptr) return false;
     try {
         it->reject(reason);
@@ -249,26 +278,25 @@ bool WorkflowInstance::rejectItem(const std::string& itemId,
 
 bool WorkflowInstance::addWorkItem(const std::string& stageId,
                                    const std::string& itemId,
-                                   std::shared_ptr<WorkItem> itemTemplate) {
+                                   std::shared_ptr<LeafTask> itemTemplate) {
     if (!itemTemplate) return false;
 
-    // Resolve the target stage. It must exist and be a CompositeStage —
+    // Resolve the target stage. It must exist and be a CompositeTask —
     // adding a leaf under another leaf is meaningless.
-    CompositeStage* stage = dynamic_cast<CompositeStage*>(root_->find(stageId));
+    CompositeTask* stage = stageOf(root_->find(stageId));
     if (stage == nullptr) return false;
 
     // Reject duplicate ids so find() stays unambiguous.
     if (root_->find(itemId) != nullptr) return false;
 
-    // Build a fresh LeafWorkItem from the template's metadata so it takes
+    // Build a fresh LeafTask from the template's metadata so it takes
     // part in the polymorphic state machine.
-    stage->add(std::unique_ptr<WorkNode>(
-        new LeafWorkItem(itemId, itemTemplate->name(), itemTemplate->role())));
+    stage->add(decorateProjectTask(std::unique_ptr<Task>(new LeafTask(itemId, itemTemplate->name(), itemTemplate->role()))));
     return true;
 }
 
-std::size_t WorkflowInstance::topLevelIndex(const WorkNode* node) const {
-    const WorkNode* cursor = node;
+std::size_t WorkflowInstance::topLevelIndex(const Task* node) const {
+    const Task* cursor = node;
     while (cursor != nullptr && cursor->parent() != root_.get()) {
         cursor = cursor->parent();
     }
@@ -278,24 +306,24 @@ std::size_t WorkflowInstance::topLevelIndex(const WorkNode* node) const {
     return root_->childCount();
 }
 
-bool WorkflowInstance::isActive(const WorkNode* node) const {
-    if (state_ != RUNNING || node == nullptr) return false;
+bool WorkflowInstance::isActive(const Task* node) const {
+    if (state() != RUNNING || node == nullptr) return false;
     if (definition_.stages.empty()) return true;
     return topLevelIndex(node) <= currentStage_;
 }
 
-bool WorkflowInstance::adoptItem(const std::string& parentId, std::unique_ptr<LeafWorkItem> leaf) {
-    if (!leaf) return false;
-    WorkNode* parent = root_->find(parentId);
+bool WorkflowInstance::adoptItem(const std::string& parentId, std::unique_ptr<Task> leaf) {
+    if (!leaf || leaf->leaf() == nullptr) return false;
+    Task* parent = root_->find(parentId);
     if (parent == nullptr) return false;
     if (root_->find(leaf->id()) != nullptr) return false;
-    LeafWorkItem* added = leaf.get();
-    CompositeStage* stage = dynamic_cast<CompositeStage*>(parent);
-    LeafWorkItem* parentItem = dynamic_cast<LeafWorkItem*>(parent);
+    LeafTask* added = leaf->leaf();
+    CompositeTask* stage = stageOf(parent);
+    LeafTask* parentItem = leafOf(parent);
     if (stage != nullptr) {
-        stage->add(std::unique_ptr<WorkNode>(leaf.release()));
+        stage->add(std::move(leaf));
     } else if (parentItem != nullptr) {
-        parentItem->addSubtask(std::move(leaf));
+        CompositeTask::addSubtask(*parentItem, std::move(leaf));
     } else {
         return false;
     }
@@ -306,7 +334,7 @@ bool WorkflowInstance::adoptItem(const std::string& parentId, std::unique_ptr<Le
         }
     }
     if (isActive(parent) && !waitsForSiblings &&
-        (parentItem == nullptr || parentItem->status() != WorkItem::CREATED)) {
+        (parentItem == nullptr || parentItem->status() != LeafTask::CREATED)) {
         added->makeAvailable();
     }
     return true;
@@ -316,28 +344,31 @@ bool WorkflowInstance::requiresSignOff() const { return requiresSignOff_; }
 
 void WorkflowInstance::setRequiresSignOff(bool required) { requiresSignOff_ = required; }
 
-void WorkflowInstance::signOff() { instanceState_->signOff(*this); }
+void WorkflowInstance::signOff() {
+    if (state() != AWAITING_SIGNOFF) illegal("signOff", state());
+    signedOff_ = true;
+}
 
-CompositeStage& WorkflowInstance::reopenForFixes(const WorkflowFactory& factory) {
-    instanceState_->reopen(*this);
+CompositeTask& WorkflowInstance::reopenForFixes(const WorkflowFactory& factory) {
+    if (state() != AWAITING_SIGNOFF) illegal("reopen", state());
     const std::string fixesId = id_ + "-fixes";
-    CompositeStage* fixes = dynamic_cast<CompositeStage*>(root_->find(fixesId));
+    CompositeTask* fixes = stageOf(root_->find(fixesId));
     if (fixes == nullptr) {
-        root_->add(std::unique_ptr<WorkNode>(factory.createStage(fixesId, "Sign-off fixes").release()));
+        root_->add(std::unique_ptr<Task>(factory.createStage(fixesId, "Sign-off fixes").release()));
         definition_.stages.push_back(fixesId);
-        fixes = dynamic_cast<CompositeStage*>(root_->find(fixesId));
+        fixes = stageOf(root_->find(fixesId));
     }
     currentStage_ = topLevelIndex(fixes);
     return *fixes;
 }
 
 void WorkflowInstance::rebuild(const WorkflowDefinition& definition, const std::string& name,
-                               std::unique_ptr<CompositeStage> root, const std::string& state,
+                               std::unique_ptr<CompositeTask> root, const std::string& state,
                                std::size_t stageIndex, const std::string& reason, bool signOffRequired) {
     definition_ = definition;
     name_ = name;
     root_ = std::move(root);
-    setState(createInstanceState(state));
+    setStatus(state);
     currentStage_ = stageIndex;
     reason_ = reason;
     requiresSignOff_ = signOffRequired;
@@ -346,15 +377,15 @@ void WorkflowInstance::rebuild(const WorkflowDefinition& definition, const std::
 // ---------------------------------------------------------
 // Memento
 // ---------------------------------------------------------
-std::shared_ptr<InstanceMemento>
+std::shared_ptr<Memento>
 WorkflowInstance::createMemento(const std::string& label) const {
-    std::shared_ptr<InstanceMemento> m(
-        new InstanceMemento(label, instanceState_->name()));
+    std::shared_ptr<Memento> m(
+        new Memento(label, state()));
     m->setStageIndex(currentStage_);
 
     DepthFirstIterator it(root_.get());
     for (it.first(); !it.isDone(); it.next()) {
-        LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(it.currentItem());
+        LeafTask* leaf = leafOf(it.currentItem());
         if (leaf != nullptr) {
             m->addItem(WorkItemSnapshot(leaf->status(),
                                         leaf->assignee(),
@@ -365,11 +396,11 @@ WorkflowInstance::createMemento(const std::string& label) const {
     return m;
 }
 
-void WorkflowInstance::restoreFromMemento(InstanceMemento* memento) {
+void WorkflowInstance::restoreFromMemento(Memento* memento) {
     if (!memento) return;
 
-    // 1. Rebuild the instance state object (not just the cached string).
-    setState(createInstanceState(memento->getStatusName()));
+    // 1. The project's own flags; the tree decides the rest of its status.
+    setStatus(memento->getStatusName());
     if (memento->getStageIndex() < root_->childCount() || definition_.stages.empty()) {
         currentStage_ = memento->getStageIndex();
     }
@@ -379,7 +410,7 @@ void WorkflowInstance::restoreFromMemento(InstanceMemento* memento) {
     std::size_t i = 0;
     DepthFirstIterator it(root_.get());
     for (it.first(); !it.isDone(); it.next()) {
-        LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(it.currentItem());
+        LeafTask* leaf = leafOf(it.currentItem());
         if (leaf == nullptr) continue;
 
         const WorkItemSnapshot* snap = nullptr;

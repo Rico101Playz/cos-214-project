@@ -5,7 +5,7 @@
 #include <vector>
 #include <iostream>
 
-class ItemTemplate {
+class TaskTemplate {
 public:
     std::string id;
     std::string name;
@@ -16,15 +16,15 @@ public:
     std::string priority;
     std::vector<std::string> blockedBy;
 
-    ItemTemplate(std::string n) : id(n), name(n), priority("Medium") {}
-    ItemTemplate(const std::string& itemId, const std::string& itemName,
+    TaskTemplate(std::string n) : id(n), name(n), priority("Medium") {}
+    TaskTemplate(const std::string& itemId, const std::string& itemName,
                  const std::string& itemRole, const std::string& itemUnit = "",
                  const std::string& approver = "", const std::string& itemPriority = "Medium")
         : id(itemId), name(itemName), role(itemRole), unit(itemUnit), priority(itemPriority) {
         if (!approver.empty()) approverRoles.push_back(approver);
     }
 
-    ItemTemplate& alsoApprovedBy(const std::string& approver) {
+    TaskTemplate& alsoApprovedBy(const std::string& approver) {
         approverRoles.push_back(approver);
         return *this;
     }
@@ -51,7 +51,7 @@ public:
     std::string policy;
     bool signOff = false;
     std::vector<StageTemplate> layout;
-    std::vector<ItemTemplate> templates;
+    std::vector<TaskTemplate> templates;
 
     bool structured() const { return !layout.empty() || !templates.empty(); }
 

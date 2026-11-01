@@ -1,23 +1,21 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <cassert>
-#include "patterns/execution/ApprovalDecision.h"
-#include "patterns/execution/ApprovalRequest.h"
-#include "patterns/execution/ApprovalHandler.h"
-#include "patterns/execution/AutoApproveHandler.h"
-#include "patterns/execution/TimeoutEscalationHandler.h"
-#include "patterns/execution/ReviewerHandler.h"
-#include "patterns/execution/TechLeadHandler.h"
-#include "patterns/execution/ReleaseManagerHandler.h"
+#include "chain_of_responsibility/ApprovalDecision.h"
+#include "chain_of_responsibility/RoleApprovalHandler.h"
+#include "chain_of_responsibility/ApprovalRequest.h"
+#include "chain_of_responsibility/ApprovalHandler.h"
+#include "chain_of_responsibility/AutoApproveHandler.h"
+#include "chain_of_responsibility/TimeoutEscalationHandler.h"
 
 TEST(ChainOfResponsibility, Chain) {
 
     // 1. Build the chain: Auto -> Reviewer -> TechLead -> TimeoutEscalation -> ReleaseManager
     ApprovalHandler* autoHandler = new AutoApproveHandler();
-    ApprovalHandler* reviewer = new ReviewerHandler();
-    ApprovalHandler* techLead = new TechLeadHandler();
+    ApprovalHandler* reviewer = new RoleApprovalHandler("Reviewer");
+    ApprovalHandler* techLead = new RoleApprovalHandler("TechLead");
     ApprovalHandler* timeout = new TimeoutEscalationHandler("ReleaseManager");
-    ApprovalHandler* releaseMgr = new ReleaseManagerHandler();
+    ApprovalHandler* releaseMgr = new RoleApprovalHandler("ReleaseManager");
 
     autoHandler->setNext(reviewer);
     reviewer->setNext(techLead);

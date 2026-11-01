@@ -6,21 +6,10 @@
 #include "state_test_helpers.h"
 
 #include "core/WorkflowInstance.h"
-#include "patterns/execution/CreatedInstance.h"
-#include "patterns/execution/RunningInstance.h"
-#include "patterns/execution/CompletedInstance.h"
-#include "patterns/execution/CancelledInstance.h"
 
 // One stage ("Build") holding two items ("a", "b").
 static WorkflowDefinition simpleDefinition() {
     return makeDefinition("Onboarding", {"Build"}, {"a", "b"});
-}
-
-TEST(InstanceState, Names) {
-    EXPECT_EQ(CreatedInstance().name(), "Created") << "CreatedInstance: name()";
-    EXPECT_EQ(RunningInstance().name(), "Running") << "RunningInstance: name()";
-    EXPECT_EQ(CompletedInstance().name(), "Completed") << "CompletedInstance: name()";
-    EXPECT_EQ(CancelledInstance().name(), "Cancelled") << "CancelledInstance: name()";
 }
 
 TEST(InstanceState, NewInstance) {
@@ -62,7 +51,7 @@ TEST(InstanceState, Completion) {
     inst.start();
     finishItem(*inst.item("a"));
     finishItem(*inst.item("b"));
-    EXPECT_EQ(inst.state(), WorkflowInstance::RUNNING) << "Completion: finishing the work does not move the instance by itself";
+    EXPECT_EQ(inst.state(), WorkflowInstance::COMPLETED) << "Completion: a project is Completed as soon as its last task is";
 
     inst.advance();
     EXPECT_EQ(inst.state(), WorkflowInstance::COMPLETED) << "Completion: advance() with all work done -> Completed";
@@ -117,7 +106,7 @@ TEST(InstanceState, EmptyAndFlatDefinitions) {
 
 TEST(InstanceState, StageProgression) {
     WorkflowInstance inst("inst-1", makeDefinition("Delivery", {"Build", "Release"}, {"a"}));
-    CompositeStage* release = static_cast<CompositeStage*>(inst.find("Release"));
+    CompositeTask* release = static_cast<CompositeTask*>(inst.find("Release"));
     addLeaf(*release, "b");
 
     inst.start();
@@ -137,19 +126,14 @@ TEST(InstanceState, StageProgression) {
     EXPECT_EQ(inst.state(), WorkflowInstance::COMPLETED) << "Stages: the last stage finishing completes the instance";
 }
 
-TEST(InstanceState, StatesRefuseDirectly) {
-    WorkflowInstance inst("inst-1", simpleDefinition());
+TEST(InstanceState, ProjectRefusals) {
+    WorkflowInstance running("inst-1", simpleDefinition());
+    running.start();
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ running.start(); }, "Running")) << "Running: start() is refused, naming the status";
 
-    CompletedInstance done;
-    EXPECT_TRUE(throwsLogicErrorContaining([&]{ done.start(inst); }, "Illegal instance operation")) << "CompletedInstance: start() is refused with the standard message";
-    EXPECT_THROW(([&]{ done.cancel(inst, "x"); })(), std::logic_error) << "CompletedInstance: cancel() is refused";
-
-    CancelledInstance gone;
-    EXPECT_THROW(([&]{ gone.start(inst); })(), std::logic_error) << "CancelledInstance: start() is refused";
-    EXPECT_THROW(([&]{ gone.cancel(inst, "x"); })(), std::logic_error) << "CancelledInstance: cancel() is refused";
-
-    RunningInstance running;
-    EXPECT_TRUE(throwsLogicErrorContaining([&]{ running.start(inst); }, "Running")) << "RunningInstance: start() is refused, naming the state";
-
-    EXPECT_EQ(inst.state(), WorkflowInstance::CREATED) << "Refused calls leave the instance untouched";
+    WorkflowInstance gone("inst-2", simpleDefinition());
+    gone.cancel("x");
+    EXPECT_TRUE(throwsLogicErrorContaining([&]{ gone.start(); }, "Illegal instance operation")) << "Cancelled: start() is refused with the standard message";
+    EXPECT_THROW(([&]{ gone.cancel("y"); })(), std::logic_error) << "Cancelled: cancel() is refused";
+    EXPECT_EQ(gone.reason(), "x") << "Refused calls leave the project untouched";
 }

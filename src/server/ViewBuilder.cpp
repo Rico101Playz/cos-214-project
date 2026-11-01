@@ -1,9 +1,9 @@
 #include "server/ViewBuilder.h"
-#include "patterns/structural/Tividy.h"
-#include "patterns/structural/SecuredTividy.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/OrgMember.h"
-#include "patterns/creation/PolicyCatalog.h"
+#include "mediator/TividyMediator.h"
+#include "proxy/SecuredMediator.h"
+#include "composite/LeafTask.h"
+#include "org_composite/OrgMember.h"
+#include "abstract_factory/PolicyCatalog.h"
 #include "server/ActivityLog.h"
 #include <set>
 
@@ -66,10 +66,10 @@ Json refs(const std::vector<ItemRef>& values) {
     return out;
 }
 
-void collect(Tividy& engine, const SecuredTividy& viewer, const WorkflowInstance& instance,
-             WorkNode& node, const std::string& parentStage, Json& stages, Json& items) {
+void collect(TividyMediator& engine, const SecuredMediator& viewer, const WorkflowInstance& instance,
+             Task& node, const std::string& parentStage, Json& stages, Json& items) {
     const Company& org = engine.organisation();
-    CompositeStage* stage = dynamic_cast<CompositeStage*>(&node);
+    CompositeTask* stage = stageOf(&node);
     if (stage != nullptr) {
         std::string stageId = parentStage;
         if (&node != &instance.root()) {
@@ -89,10 +89,10 @@ void collect(Tividy& engine, const SecuredTividy& viewer, const WorkflowInstance
         return;
     }
 
-    LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(&node);
+    LeafTask* leaf = leafOf(&node);
     if (leaf == nullptr) return;
     const std::string& id = instance.id();
-    LeafWorkItem* parentItem = leaf->parentItem();
+    LeafTask* parentItem = leaf->parentItem();
 
     Json item = Json::object();
     item.set("id", leaf->id());
@@ -123,25 +123,25 @@ void collect(Tividy& engine, const SecuredTividy& viewer, const WorkflowInstance
     item.set("blockedBy", strings(leaf->blockedBy()));
     item.set("openBlockers", strings(leaf->openBlockers()));
     Json subtasks = Json::array();
-    for (std::size_t i = 0; i < leaf->childCount(); ++i) subtasks.push(leaf->child(i)->id());
+    for (std::size_t i = 0; i < node.childCount(); ++i) subtasks.push(node.child(i)->id());
     item.set("subtasks", subtasks);
     item.set("openSubtasks", strings(leaf->openSubtasks()));
 
     Json actions = Json::array();
     bool running = instance.state() == WorkflowInstance::RUNNING;
     const std::string& status = leaf->status();
-    bool finished = status == WorkItem::COMPLETED || status == WorkItem::CANCELLED;
+    bool finished = status == LeafTask::COMPLETED || status == LeafTask::CANCELLED;
     if (running) {
         if (viewer.mayClaim(id, leaf->id()) && !viewer.isManager()) actions.push("claim");
-        if (viewer.isManager() && (status == WorkItem::AVAILABLE || status == WorkItem::ASSIGNED ||
-                                   status == WorkItem::REJECTED || status == WorkItem::ESCALATED)) {
+        if (viewer.isManager() && (status == LeafTask::AVAILABLE || status == LeafTask::ASSIGNED ||
+                                   status == LeafTask::REJECTED || status == LeafTask::ESCALATED)) {
             actions.push("assign");
             actions.push("autoAssign");
         }
-        if (viewer.isManager() && status == WorkItem::AVAILABLE) actions.push("claim");
+        if (viewer.isManager() && status == LeafTask::AVAILABLE) actions.push("claim");
         if (viewer.mayWork(id, leaf->id())) {
-            if (status == WorkItem::ASSIGNED || status == WorkItem::REJECTED) actions.push("begin");
-            if (status == WorkItem::IN_PROGRESS) actions.push("done");
+            if (status == LeafTask::ASSIGNED || status == LeafTask::REJECTED) actions.push("begin");
+            if (status == LeafTask::IN_PROGRESS) actions.push("done");
         }
         if (viewer.mayWithdraw(id, leaf->id())) actions.push("withdraw");
         if (viewer.mayDecide(id, leaf->id())) {
@@ -149,7 +149,7 @@ void collect(Tividy& engine, const SecuredTividy& viewer, const WorkflowInstance
             actions.push("reject");
         }
         if (viewer.mayEscalate(id, leaf->id()) &&
-            (status == WorkItem::ASSIGNED || status == WorkItem::IN_PROGRESS)) {
+            (status == LeafTask::ASSIGNED || status == LeafTask::IN_PROGRESS)) {
             actions.push("escalate");
         }
         if (!finished && viewer.mayAddSubtask(id, leaf->id())) actions.push("subtask");
@@ -157,14 +157,14 @@ void collect(Tividy& engine, const SecuredTividy& viewer, const WorkflowInstance
     }
     item.set("actions", actions);
     items.push(item);
-    for (std::size_t i = 0; i < leaf->childCount(); ++i) {
-        collect(engine, viewer, instance, *leaf->child(i), parentStage, stages, items);
+    for (std::size_t i = 0; i < node.childCount(); ++i) {
+        collect(engine, viewer, instance, *node.child(i), parentStage, stages, items);
     }
 }
 
 }
 
-Json ViewBuilder::hello(const Tividy& engine) {
+Json ViewBuilder::hello(const TividyMediator& engine) {
     const Company& org = engine.organisation();
     Json out = Json::object();
     out.set("type", "hello");
@@ -178,7 +178,7 @@ Json ViewBuilder::hello(const Tividy& engine) {
     return out;
 }
 
-Json ViewBuilder::state(Tividy& engine, const SecuredTividy& viewer, const ActivityLog* log) {
+Json ViewBuilder::state(TividyMediator& engine, const SecuredMediator& viewer, const ActivityLog* log) {
     const Company& org = engine.organisation();
     if (org.find(viewer.actor()) == nullptr) return hello(engine);
     Json out = Json::object();
@@ -231,7 +231,7 @@ Json ViewBuilder::state(Tividy& engine, const SecuredTividy& viewer, const Activ
         project.set("progress", engine.progress(ids[i]));
         project.set("canSignOff", viewer.maySignOff(ids[i]));
         project.set("signOffRequired", instance.requiresSignOff());
-        WorkNode* current = instance.currentStage();
+        Task* current = instance.currentStage();
         project.set("currentStage", current != nullptr && current != &instance.root() ? current->id() : std::string());
         Json stages = Json::array();
         Json items = Json::array();
@@ -244,7 +244,7 @@ Json ViewBuilder::state(Tividy& engine, const SecuredTividy& viewer, const Activ
     out.set("myWork", refs(engine.workFor(viewer.actor())));
     out.set("approvals", refs(engine.approvalsFor(viewer.actor())));
     out.set("signOffs", strings(engine.signOffsFor(viewer.actor())));
-    out.set("priorities", strings(std::vector<std::string>(LeafWorkItem::PRIORITIES, LeafWorkItem::PRIORITIES + 4)));
+    out.set("priorities", strings(std::vector<std::string>(LeafTask::PRIORITIES, LeafTask::PRIORITIES + 4)));
 
     Json history = Json::object();
     history.set("undo", strings(engine.undoLabels(8)));

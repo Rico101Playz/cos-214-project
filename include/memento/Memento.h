@@ -1,0 +1,88 @@
+#ifndef MEMENTO_H
+#define MEMENTO_H
+
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
+
+// ---------------------------------------------------------
+// WorkItemSnapshot
+// ---------------------------------------------------------
+class WorkItemSnapshot {
+private:
+    std::string stateName;
+    std::string assignee;
+    std::string reason;
+    std::string itemId;
+
+public:
+    WorkItemSnapshot(std::string stateName, std::string assignee, std::string reason,
+                     std::string itemId = "");
+
+    const std::string& getStateName() const;
+    const std::string& getAssignee() const;
+    const std::string& getReason() const;
+    const std::string& getItemId() const;
+};
+
+// ---------------------------------------------------------
+// ApprovalSnapshot
+// ---------------------------------------------------------
+class ApprovalSnapshot {
+private:
+    std::string itemId;
+    std::string pendingRole;
+    bool approved;
+
+public:
+    ApprovalSnapshot(std::string itemId, std::string pendingRole, bool approved);
+
+    const std::string& getItemId() const;
+    const std::string& getPendingRole() const;
+    bool getApproved() const;
+};
+
+// ---------------------------------------------------------
+// Memento
+// ---------------------------------------------------------
+class Memento {
+private:
+    std::string label;
+    std::string statusName;
+    std::vector<WorkItemSnapshot> items;
+    std::vector<ApprovalSnapshot> approvals;
+    std::size_t stageIndex;
+
+public:
+    Memento(std::string lbl, std::string statusName);
+
+    std::size_t getStageIndex() const;
+    void setStageIndex(std::size_t index);
+
+    const std::string& getLabel() const;
+    const std::string& getStatusName() const;
+    
+    const std::vector<WorkItemSnapshot>& getItems() const;
+    const std::vector<ApprovalSnapshot>& getApprovals() const;
+
+    void addItem(WorkItemSnapshot item);
+    void addApproval(ApprovalSnapshot approval);
+};
+
+// ---------------------------------------------------------
+// SnapshotStore
+// ---------------------------------------------------------
+class SnapshotStore {
+private:
+    std::map<std::string, std::map<std::string, std::shared_ptr<Memento>>> snapshots;
+
+public:
+    ~SnapshotStore() = default;
+
+    void save(const std::string& instanceId, std::shared_ptr<Memento> memento);
+    Memento* get(const std::string& instanceId, const std::string& label) const;
+    bool has(const std::string& instanceId, const std::string& label) const;
+};
+
+#endif // MEMENTO_H

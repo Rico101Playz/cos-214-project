@@ -3,14 +3,14 @@
 
 #include "server/Json.h"
 
-class Tividy;
-class SecuredTividy;
+class TividyMediator;
+class SecuredMediator;
 class ActivityLog;
 
 class ViewBuilder {
 public:
-    static Json hello(const Tividy& engine);
-    static Json state(Tividy& engine, const SecuredTividy& viewer, const ActivityLog* log = nullptr);
+    static Json hello(const TividyMediator& engine);
+    static Json state(TividyMediator& engine, const SecuredMediator& viewer, const ActivityLog* log = nullptr);
 };
 
 #endif

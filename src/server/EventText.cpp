@@ -1,14 +1,14 @@
 #include "server/EventText.h"
-#include "patterns/structural/Tividy.h"
+#include "mediator/TividyMediator.h"
 
-std::string EventText::describe(const Tividy& engine, const WorkflowEvent& event) {
+std::string EventText::describe(const TividyMediator& engine, const WorkflowEvent& event) {
     std::string itemName = event.itemId;
     std::string projectName = event.instanceId;
     try {
         if (!event.instanceId.empty()) {
             const WorkflowInstance& instance = engine.instance(event.instanceId);
             projectName = instance.name();
-            const WorkItem* item = instance.item(event.itemId);
+            const LeafTask* item = instance.item(event.itemId);
             if (item != nullptr) itemName = item->name();
         }
     } catch (const std::exception&) {
@@ -31,7 +31,7 @@ std::string EventText::describe(const Tividy& engine, const WorkflowEvent& event
     if (t == WorkflowEvent::SUBTASK_ADDED) {
         std::string parentName = event.detail;
         try {
-            const WorkItem* parent = engine.instance(event.instanceId).item(event.detail);
+            const LeafTask* parent = engine.instance(event.instanceId).item(event.detail);
             if (parent != nullptr) parentName = parent->name();
         } catch (const std::exception&) {
         }

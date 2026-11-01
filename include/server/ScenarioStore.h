@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-class Tividy;
+class TividyMediator;
 class ActivityLog;
 
 struct ScenarioInfo {
@@ -22,8 +22,8 @@ struct ScenarioInfo {
 class ScenarioStore {
 public:
     static std::vector<ScenarioInfo> list(const std::string& directory);
-    static void load(const std::string& path, Tividy& engine, ActivityLog* log);
-    static void save(const std::string& path, const Tividy& engine, const ActivityLog* log);
+    static void load(const std::string& path, TividyMediator& engine, ActivityLog* log);
+    static void save(const std::string& path, const TividyMediator& engine, const ActivityLog* log);
     static std::string createBlank(const std::string& directory, const std::string& scenarioName,
                                    const std::string& company, const std::string& owner);
     static std::string slug(const std::string& name);
