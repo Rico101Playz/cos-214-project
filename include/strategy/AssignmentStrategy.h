@@ -21,14 +21,39 @@
 // organisation side shares no class with the project side.
 typedef std::map<std::string, std::string> TaskFacts;
 
+/**
+ * @class AssignmentStrategy
+ * @brief Abstract Strategy interface for selecting an eligible participant for a work item.
+ *
+ * Defines the algorithm contract used by AssignmentService to select a concrete
+ * Participant based on required roles, operational policies, and organisational context.
+ */
 class AssignmentStrategy {
 public:
+    /**
+     * @brief Virtual destructor for polymorphic cleanup.
+     */
     virtual ~AssignmentStrategy() = default;
 
+    /**
+     * @brief Selects an eligible participant to handle a work item.
+     *
+     * Determines a candidate participant matching the role without altering
+     * any participant's current workload.
+     *
+     * @param[in] facts The data of the work item requiring assignment (unit, risk, kind, ...).
+     * @param[in] role The role required to perform the item.
+     * @param[in] organisation The organisation pool containing participants and roles.
+     * @return Participant* Pointer to the chosen participant, or nullptr if no eligible candidate is available.
+     */
     virtual Participant* assign(const TaskFacts& facts,
                                 const std::string& role,
                                 const Organisation& organisation) const = 0;
 
+    /**
+     * @brief Retrieves the descriptive name of the assignment strategy.
+     * @return std::string The name of the concrete strategy policy.
+     */
     virtual std::string name() const = 0;
 };
 

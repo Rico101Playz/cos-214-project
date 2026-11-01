@@ -11,3 +11,5 @@ build/
 # ignore ide settings vscode
 .vscode/build-*/
 scenarios/*.tmp
+html/
+latex/
