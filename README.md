@@ -6,6 +6,8 @@
 
 The primary demonstration scenario is **Software Feature Delivery**: a mid-sized software team taking a feature request from intake through implementation, review, approval, and release.
 
+The secondary demonstration scenario is **Manufacturing: production order execution.** A mid-sized manufacturer takes a customer production order from release to the shop floor through scheduling, machining and assembly, quality inspection, and final approval and dispatch. The workflow models work assignment to machine operators and QC inspectors, a routing decision at inspection (pass → dispatch, fail → rework or scrap).
+
 ---
 
 ## Team
@@ -22,6 +24,26 @@ The primary demonstration scenario is **Software Feature Delivery**: a mid-sized
 
 **Group leader:** Heinrich Muller
 
+## Team Contributions
+
+Our team adopted a collaborative development approach. Work was divided based on system architecture, design patterns, and engineering responsibilities, with all members contributing to research, testing, and integration. 
+
+| Team Member | Key Contributions |
+| :--- | :--- |
+| **Riti Botha** | **Patterns:** Decorator, Chain of Responsibility<br>**Documentation:** Research, Doxygen Comments<br>**Testing:** Test suite contributions |
+| **Graeme Geerkens** | **Workflow:** GitHub contribution workflow, Repository file structure, Dev branch setup<br>**Patterns:** Observer<br>**Engineering:** CI/CD pipeline, CI/CD README<br>**Testing:** Test suite contributions |
+| **Rico Geerkens** | **UML:** Activity Diagrams<br>**Patterns:** Facade, Iterator<br>**Engineering:** Assisted CI branch setup, Dev branch integration, Resolved merge conflicts<br>**Documentation:** Doxygen Comments<br>**Testing:** Test suite contributions |
+| **Kendra Maree** | **UML:** Sequence Diagrams, State Diagram<br>**Patterns:** State, Composite<br>**UI/UX:** TUI (Text User Interface)<br>**Documentation:** Research, PowerPoint<br>**Testing:** Test suite contributions |
+| **Gary Mull** | **Patterns:** Memento, Builder, State Factory<br>**UI/UX:** Interactive main before TUI<br>**Documentation:** README updates<br>**Testing:** Test suite contributions |
+| **Heinrich Muller** | **Patterns:** Google Tests (Testing Framework)<br>**UML:** Class Diagram<br>**Engineering:** Docker, Integration, Website setup |
+| **Chitombala Sikazwe** | **Design:** Project Scope & Design Rationale<br>**Patterns:** Strategy<br>**Engineering:** Resolved merge conflicts<br>**Documentation:** README updates<br>**Testing:** Test suite contributions |
+
+*(Note: Every member contributed meaningfully to the automated test suite)*
+
+## Google DOCS
+
+https://docs.google.com/document/d/13nnrzcGJ9g7ikiHVaY9U0yIP8Tpx56XB8VCrPTZr0zE/edit?tab=t.0
+
 ## Build & Run
 
 ### Prerequisites
@@ -35,6 +57,9 @@ mkdir build && cd build
 cmake ..
 cmake --build .
 ```
+
+## DOCKER Build
+**For Docker Instructions please look at the docker.md**
 
 This produces three programs in `build/`:
 
