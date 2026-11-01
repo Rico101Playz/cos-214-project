@@ -6,24 +6,15 @@
 
 #include "core/WorkflowDefinition.h"
 #include "core/WorkflowInstance.h"
-#include "patterns/execution/Memento.h"
+#include "memento/Memento.h"
 
-#include "patterns/execution/WorkCommand.h"
-#include "patterns/execution/CommandHistory.h"
-#include "patterns/execution/CommandInvoker.h"
+#include "command/Command.h"
+#include "command/CommandHistory.h"
+#include "command/CommandInvoker.h"
+#include "command/RequestCommand.h"
 
-#include "patterns/execution/AddWorkCommand.h"
-#include "patterns/execution/AssignCommand.h"
-#include "patterns/execution/StartCommand.h"
-#include "patterns/execution/CompleteCommand.h"
-#include "patterns/execution/ApproveCommand.h"
-#include "patterns/execution/RejectCommand.h"
-#include "patterns/execution/EscalateCommand.h"
-#include "patterns/execution/InvokeCommand.h"
-#include "patterns/execution/CancelCommand.h"
-#include "patterns/execution/SetDataCommand.h"
-
-#include "patterns/structural/LeafWorkItem.h"
+#include "composite/LeafTask.h"
+#include "project_test_helpers.h"
 
 // One stage, one item — a live instance the commands can operate on.
 static WorkflowDefinition singleItemDefinition() {
@@ -34,6 +25,12 @@ static WorkflowDefinition singleItemDefinition() {
     return def;
 }
 
+// A RequestCommand for the action on one item of one project, run by the ProjectFacade.
+static RequestCommand* command(ProjectFacade& projects, SnapshotStore& store, Action action, const std::string& projectId,
+                               const std::string& taskId = "") {
+    return new RequestCommand(&projects, Request(action, TaskRef(projectId, taskId)), &store);
+}
+
 // -------------------------------------------------------------------------
 // CommandHistory (unchanged behaviour, kept minimal)
 // -------------------------------------------------------------------------
@@ -41,13 +38,14 @@ TEST(Command, History) {
 
     CommandHistory history;
     SnapshotStore store;
+    ProjectFacade projects;
 
     EXPECT_FALSE(history.canUndo()) << "CommandHistory: empty initially";
 
-    history.push(std::unique_ptr<WorkCommand>(new StartCommand(&store, "WF-01", "Item1")));
+    history.push(std::unique_ptr<Command>(command(projects, store, Action::Start, "WF-01", "Item1")));
     EXPECT_TRUE(history.canUndo()) << "CommandHistory: canUndo() after push";
 
-    std::unique_ptr<WorkCommand> cmd = history.pop();
+    std::unique_ptr<Command> cmd = history.pop();
     EXPECT_NE(cmd, nullptr) << "CommandHistory: pop() returns non-null";
     EXPECT_FALSE(history.canUndo()) << "CommandHistory: empty after pop";
     EXPECT_EQ(history.pop(), nullptr) << "CommandHistory: pop() on empty returns nullptr";
@@ -59,20 +57,21 @@ TEST(Command, History) {
 TEST(Command, Invoker) {
 
     SnapshotStore store;
+    ProjectFacade projects;
     CommandInvoker invoker;
-    WorkflowInstance instance("WF-01", singleItemDefinition());
+    WorkflowInstance& instance = adopt(projects, "WF-01", singleItemDefinition());
     instance.start();
 
-    LeafWorkItem* item = static_cast<LeafWorkItem*>(instance.item("Item1"));
+    LeafTask* item = static_cast<LeafTask*>(instance.item("Item1"));
     EXPECT_NE(item, nullptr) << "Invoker: item exists after start()";
     EXPECT_TRUE(item->status() == "Available") << "Invoker: item is Available before the command";
 
     // Complete is illegal from Available — the invoker must propagate the throw
     // without corrupting state.
-    std::unique_ptr<WorkCommand> badCmd(new CompleteCommand(&store, "WF-01", "Item1"));
+    std::unique_ptr<Command> badCmd(command(projects, store, Action::Complete, "WF-01", "Item1"));
     bool threw = false;
     try {
-        invoker.invoke(std::move(badCmd), &instance);
+        invoker.invoke(std::move(badCmd));
     } catch (const std::logic_error&) {
         threw = true;
     }
@@ -84,179 +83,175 @@ TEST(Command, Invoker) {
     item->start();   // -> InProgress
     EXPECT_TRUE(item->status() == "InProgress") << "Invoker: item is InProgress before complete()";
 
-    std::unique_ptr<WorkCommand> okCmd(new CompleteCommand(&store, "WF-01", "Item1"));
-    invoker.invoke(std::move(okCmd), &instance);
-    EXPECT_TRUE(item->status() == "AwaitingApproval") << "Invoker: CompleteCommand moved item to AwaitingApproval";
+    std::unique_ptr<Command> okCmd(command(projects, store, Action::Complete, "WF-01", "Item1"));
+    invoker.invoke(std::move(okCmd));
+    EXPECT_TRUE(item->status() == "AwaitingApproval") << "Invoker: Complete moved item to AwaitingApproval";
 
-    invoker.undoLast(&instance);
+    invoker.undoLast();
     EXPECT_TRUE(item->status() == "InProgress") << "Invoker: undoLast() restored the pre-command state";
 }
 
 // -------------------------------------------------------------------------
-// Each concrete command: assert describe() AND the post-execute effect
+// Each action a RequestCommand performs: assert describe() AND the effect
 // -------------------------------------------------------------------------
-TEST(Command, ConcreteCommands) {
+TEST(Command, RequestCommands) {
 
     SnapshotStore store;
+    ProjectFacade projects;
     CommandInvoker invoker;
 
-    // --- AddWorkCommand: adds an item into a stage ---
+    // --- AddTask: adds a prepared item into a stage ---
     {
-        WorkflowInstance inst("WF-ADD", singleItemDefinition());
         WorkflowDefinition emptyDef;
         emptyDef.name = "Empty";
         emptyDef.stages.push_back("Stage1");
-        WorkflowInstance inst2("WF-ADD2", emptyDef);
+        WorkflowInstance& inst2 = adopt(projects, "WF-ADD2", emptyDef);
         inst2.start();
 
-        std::shared_ptr<LeafWorkItem> newItem(
-            new LeafWorkItem("NewItem", "NewItem", "Developer"));
-        AddWorkCommand cmd(&store, "WF-ADD2", "Stage1", newItem);
-        EXPECT_EQ(cmd.describe(), "AddWorkCommand: stage=Stage1") << "AddWorkCommand: describe()";
-        // AddWorkCommand target is instance 2
-        invoker.invoke(std::unique_ptr<WorkCommand>(new AddWorkCommand(
-            &store, "WF-ADD2", "Stage1", newItem)), &inst2);
-        EXPECT_NE(inst2.item("NewItem"), nullptr) << "AddWorkCommand: the item is now in the instance";
+        Request add = Request(Action::AddTask, TaskRef("WF-ADD2")).with("parent", "Stage1").with("name", "NewItem")
+                          .with("role", "Developer");
+        RequestCommand cmd(&projects, add, &store);
+        EXPECT_EQ(cmd.describe(), "AddTask: name=NewItem, parent=Stage1, role=Developer") << "AddTask: describe()";
+        Response added = invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, add, &store)));
+        ASSERT_NE(inst2.item(added.data("item")), nullptr) << "AddTask: the new task is in the instance under the id the answer gives";
+        EXPECT_EQ(inst2.item(added.data("item"))->name(), "NewItem") << "AddTask: the facade built the task from the Request";
     }
 
-    // --- AssignCommand on a live Available item ---
+    // --- Assign on a live Available item ---
     {
-        WorkflowInstance inst("WF-ASG", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-ASG", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
 
-        AssignCommand cmd(&store, "WF-ASG", "Item1", "Alice");
-        EXPECT_EQ(cmd.describe(), "AssignCommand: item=Item1, participant=Alice") << "AssignCommand: describe()";
+        Request assign = Request(Action::Assign, TaskRef("WF-ASG", "Item1")).with("participant", "Alice");
+        RequestCommand cmd(&projects, assign, &store);
+        EXPECT_EQ(cmd.describe(), "Assign: task=Item1, participant=Alice") << "Assign: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new AssignCommand(&store, "WF-ASG", "Item1", "Alice")), &inst);
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, assign, &store)));
 
-        EXPECT_TRUE(item->status() == "Assigned" && item->assignee() == "Alice") << "AssignCommand: item is Assigned to Alice";
+        EXPECT_TRUE(item->status() == "Assigned" && item->assignee() == "Alice") << "Assign: item is Assigned to Alice";
     }
 
-    // --- StartCommand ---
+    // --- Start ---
     {
-        WorkflowInstance inst("WF-STR", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-STR", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
         item->assign("Bob");
 
-        StartCommand cmd(&store, "WF-STR", "Item1");
-        EXPECT_EQ(cmd.describe(), "StartCommand: item=Item1") << "StartCommand: describe()";
+        std::unique_ptr<RequestCommand> cmd(command(projects, store, Action::Start, "WF-STR", "Item1"));
+        EXPECT_EQ(cmd->describe(), "Start: task=Item1") << "Start: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new StartCommand(&store, "WF-STR", "Item1")), &inst);
-        EXPECT_TRUE(item->status() == "InProgress") << "StartCommand: item is InProgress";
+        invoker.invoke(std::unique_ptr<Command>(cmd.release()));
+        EXPECT_TRUE(item->status() == "InProgress") << "Start: item is InProgress";
     }
 
-    // --- CompleteCommand ---
+    // --- Complete ---
     {
-        WorkflowInstance inst("WF-CMP", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-CMP", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
         item->assign("Bob");
         item->start();
 
-        CompleteCommand cmd(&store, "WF-CMP", "Item1");
-        EXPECT_EQ(cmd.describe(), "CompleteCommand: item=Item1") << "CompleteCommand: describe()";
+        std::unique_ptr<RequestCommand> cmd(command(projects, store, Action::Complete, "WF-CMP", "Item1"));
+        EXPECT_EQ(cmd->describe(), "Complete: task=Item1") << "Complete: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new CompleteCommand(&store, "WF-CMP", "Item1")), &inst);
-        EXPECT_TRUE(item->status() == "AwaitingApproval") << "CompleteCommand: item is AwaitingApproval";
+        invoker.invoke(std::unique_ptr<Command>(cmd.release()));
+        EXPECT_TRUE(item->status() == "AwaitingApproval") << "Complete: item is AwaitingApproval";
     }
 
-    // --- ApproveCommand ---
+    // --- Approve ---
     {
-        WorkflowInstance inst("WF-APR", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-APR", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
         item->assign("Bob");
         item->start();
         item->complete();
 
-        ApproveCommand cmd(&store, "WF-APR", "Item1", true, "Looks good");
-        EXPECT_EQ(cmd.describe(), "ApproveCommand: item=Item1, approved=true, comment=Looks good") << "ApproveCommand: describe()";
+        Request approve = Request(Action::Approve, TaskRef("WF-APR", "Item1")).with("comment", "Looks good");
+        RequestCommand cmd(&projects, approve, &store);
+        EXPECT_EQ(cmd.describe(), "Approve: task=Item1, comment=Looks good") << "Approve: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new ApproveCommand(&store, "WF-APR", "Item1", true, "Looks good")), &inst);
-        EXPECT_TRUE(item->status() == "Completed") << "ApproveCommand: item is Completed";
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, approve, &store)));
+        EXPECT_TRUE(item->status() == "Completed") << "Approve: item is Completed";
     }
 
-    // --- RejectCommand ---
+    // --- Reject ---
     {
-        WorkflowInstance inst("WF-REJ", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-REJ", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
         item->assign("Bob");
         item->start();
         item->complete();
 
-        RejectCommand cmd(&store, "WF-REJ", "Item1", "Missing data");
-        EXPECT_EQ(cmd.describe(), "RejectCommand: item=Item1, reason=Missing data") << "RejectCommand: describe()";
+        Request reject = Request(Action::Reject, TaskRef("WF-REJ", "Item1")).with("reason", "Missing data");
+        RequestCommand cmd(&projects, reject, &store);
+        EXPECT_EQ(cmd.describe(), "Reject: task=Item1, reason=Missing data") << "Reject: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new RejectCommand(&store, "WF-REJ", "Item1", "Missing data")), &inst);
-        EXPECT_TRUE(item->status() == "Rejected" && item->reason() == "Missing data") << "RejectCommand: item is Rejected with the given reason";
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, reject, &store)));
+        EXPECT_TRUE(item->status() == "Rejected" && item->reason() == "Missing data") << "Reject: item is Rejected with the given reason";
     }
 
-    // --- EscalateCommand ---
+    // --- Escalate ---
     {
-        WorkflowInstance inst("WF-ESC", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-ESC", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
         item->assign("Bob");
 
-        EscalateCommand cmd(&store, "WF-ESC", "Item1");
-        EXPECT_EQ(cmd.describe(), "EscalateCommand: item=Item1") << "EscalateCommand: describe()";
+        std::unique_ptr<RequestCommand> cmd(command(projects, store, Action::Escalate, "WF-ESC", "Item1"));
+        EXPECT_EQ(cmd->describe(), "Escalate: task=Item1") << "Escalate: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new EscalateCommand(&store, "WF-ESC", "Item1")), &inst);
-        EXPECT_TRUE(item->status() == "Escalated") << "EscalateCommand: item is Escalated";
+        invoker.invoke(std::unique_ptr<Command>(cmd.release()));
+        EXPECT_TRUE(item->status() == "Escalated") << "Escalate: item is Escalated";
     }
 
-    // --- SetDataCommand ---
+    // --- SetData ---
     {
-        WorkflowInstance inst("WF-DAT", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-DAT", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
 
-        SetDataCommand cmd(&store, "WF-DAT", "Item1", "color", "blue");
-        EXPECT_EQ(cmd.describe(), "SetDataCommand: node=Item1, key=color, value=blue") << "SetDataCommand: describe()";
+        Request set = Request(Action::SetData, TaskRef("WF-DAT", "Item1")).with("key", "color").with("value", "blue");
+        RequestCommand cmd(&projects, set, &store);
+        EXPECT_EQ(cmd.describe(), "SetData: task=Item1, key=color, value=blue") << "SetData: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new SetDataCommand(&store, "WF-DAT", "Item1", "color", "blue")), &inst);
-        EXPECT_TRUE(item->getData("color") == "blue") << "SetDataCommand: item data updated";
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, set, &store)));
+        EXPECT_TRUE(item->getData("color") == "blue") << "SetData: item data updated";
     }
 
-    // --- CancelCommand (item-level) ---
+    // --- CancelProject naming one task ---
     {
-        WorkflowInstance inst("WF-CAN", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-CAN", singleItemDefinition());
         inst.start();
-        LeafWorkItem* item = static_cast<LeafWorkItem*>(inst.item("Item1"));
-        EXPECT_TRUE(item->status() == "Available") << "CancelCommand: item starts Available";
+        LeafTask* item = static_cast<LeafTask*>(inst.item("Item1"));
+        EXPECT_TRUE(item->status() == "Available") << "Cancel task: item starts Available";
 
-        CancelCommand cmd(&store, "WF-CAN", "Item1", "Timeout");
-        EXPECT_EQ(cmd.describe(), "CancelCommand: node=Item1, reason=Timeout") << "CancelCommand: describe()";
+        Request cancel = Request(Action::CancelProject, TaskRef("WF-CAN", "Item1")).with("reason", "Timeout");
+        RequestCommand cmd(&projects, cancel, &store);
+        EXPECT_EQ(cmd.describe(), "CancelProject: task=Item1, reason=Timeout") << "Cancel task: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new CancelCommand(&store, "WF-CAN", "Item1", "Timeout")), &inst);
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, cancel, &store)));
 
-        EXPECT_TRUE(item->status() == "Cancelled") << "CancelCommand: item is Cancelled";
-        EXPECT_EQ(inst.state(), WorkflowInstance::RUNNING) << "CancelCommand: cancelling one item does not cancel the instance";
+        EXPECT_TRUE(item->status() == "Cancelled") << "Cancel task: item is Cancelled";
+        EXPECT_EQ(inst.state(), WorkflowInstance::RUNNING) << "Cancel task: cancelling one item does not cancel the instance";
     }
 
-    // --- CancelCommand (instance-level) ---
+    // --- CancelProject for the whole project ---
     {
-        WorkflowInstance inst("WF-CANI", singleItemDefinition());
+        WorkflowInstance& inst = adopt(projects, "WF-CANI", singleItemDefinition());
         inst.start();
 
-        CancelCommand cmd(&store, "WF-CANI", inst.id(), "Timeout");
-        EXPECT_EQ(cmd.describe(), "CancelCommand: node=WF-CANI, reason=Timeout") << "CancelCommand (instance): describe()";
+        Request cancel = Request(Action::CancelProject, TaskRef("WF-CANI")).with("reason", "Timeout");
+        RequestCommand cmd(&projects, cancel, &store);
+        EXPECT_EQ(cmd.describe(), "CancelProject: reason=Timeout") << "Cancel project: describe()";
 
-        invoker.invoke(std::unique_ptr<WorkCommand>(
-            new CancelCommand(&store, "WF-CANI", inst.id(), "Timeout")), &inst);
+        invoker.invoke(std::unique_ptr<Command>(new RequestCommand(&projects, cancel, &store)));
 
-        EXPECT_EQ(inst.state(), WorkflowInstance::CANCELLED) << "CancelCommand (instance): instance is Cancelled";
-        EXPECT_EQ(inst.reason(), "Timeout") << "CancelCommand (instance): the reason is recorded";
+        EXPECT_EQ(inst.state(), WorkflowInstance::CANCELLED) << "Cancel project: instance is Cancelled";
+        EXPECT_EQ(inst.reason(), "Timeout") << "Cancel project: the reason is recorded";
     }
 }

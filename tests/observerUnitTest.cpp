@@ -8,12 +8,12 @@
 
 
 #include "core/WorkflowDefinition.h"
-#include "patterns/execution/ActivityFeed.h"
-#include "patterns/execution/AutomationRule.h"
-#include "patterns/execution/EventBus.h"
-#include "patterns/execution/MetricsCollector.h"
-#include "patterns/execution/Notifier.h"
-#include "patterns/structural/Tividy.h"
+#include "observer/ActivityFeed.h"
+#include "observer/AutomationRule.h"
+#include "observer/EventBus.h"
+#include "observer/MetricsCollector.h"
+#include "observer/Notifier.h"
+#include "mediator/TividyMediator.h"
 
 namespace {
 
@@ -143,11 +143,11 @@ TEST(Observer, Observers) {
 }
 
 // ============================================================================
-// TEST: events published by the Tividy facade
+// TEST: events published by the TividyMediator facade
 // ============================================================================
 TEST(Observer, FacadeEvents) {
 
-    Tividy engine("Acme Software");
+    TividyMediator engine("Acme Software");
     engine.organisation().addParticipant("Alice", "Developer");
 
     WorkflowDefinition definition;
@@ -165,40 +165,40 @@ TEST(Observer, FacadeEvents) {
     engine.bus().attach(&notifier);
 
     std::string id = engine.startInstance("delivery");
-    EXPECT_EQ(feed.size(), 1u) << "Tividy: startInstance() publishes an event";
-    EXPECT_EQ(feed.entries()[0], "InstanceStarted " + id + " - Feature Delivery") << "Tividy: the started event names the workflow";
+    EXPECT_EQ(feed.size(), 1u) << "TividyMediator: startInstance() publishes an event";
+    EXPECT_EQ(feed.entries()[0], "InstanceStarted " + id + " - Feature Delivery") << "TividyMediator: the started event names the workflow";
 
     engine.assign(id, "Implement", "Alice");
     engine.start(id, "Implement");
     engine.complete(id, "Implement");
     engine.approve(id, "Implement");
-    EXPECT_EQ(metrics.total(), 5) << "Tividy: each successful operation publishes one event";
-    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_ASSIGNED), 1) << "Tividy: publishes ItemAssigned";
-    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_STARTED), 1) << "Tividy: publishes ItemStarted";
-    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_COMPLETED), 1) << "Tividy: publishes ItemCompleted";
-    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_APPROVED), 1) << "Tividy: publishes ItemApproved";
-    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_COMPLETED), 0) << "Tividy: no completion event while work remains";
+    EXPECT_EQ(metrics.total(), 5) << "TividyMediator: each successful operation publishes one event";
+    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_ASSIGNED), 1) << "TividyMediator: publishes ItemAssigned";
+    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_STARTED), 1) << "TividyMediator: publishes ItemStarted";
+    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_COMPLETED), 1) << "TividyMediator: publishes ItemCompleted";
+    EXPECT_EQ(metrics.count(WorkflowEvent::ITEM_APPROVED), 1) << "TividyMediator: publishes ItemApproved";
+    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_COMPLETED), 0) << "TividyMediator: no completion event while work remains";
 
     engine.assign(id, "Test", "Alice");
     engine.start(id, "Test");
     engine.complete(id, "Test");
     engine.reject(id, "Test", "Missing tests");
-    EXPECT_EQ(notifier.messages().back(), "Test was rejected: Missing tests") << "Tividy: a rejection reaches the Notifier with its reason";
+    EXPECT_EQ(notifier.messages().back(), "Test was rejected: Missing tests") << "TividyMediator: a rejection reaches the Notifier with its reason";
 
     int before = metrics.total();
-    EXPECT_THROW(([&] { engine.approve(id, "Test"); })(), std::logic_error) << "Tividy: approving rejected work is refused";
-    EXPECT_EQ(metrics.total(), before) << "Tividy: a call that throws publishes nothing";
+    EXPECT_THROW(([&] { engine.approve(id, "Test"); })(), std::logic_error) << "TividyMediator: approving rejected work is refused";
+    EXPECT_EQ(metrics.total(), before) << "TividyMediator: a call that throws publishes nothing";
 
     engine.cancel(id, "Scope cut");
-    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_CANCELLED), 1) << "Tividy: cancel() publishes an event";
-    EXPECT_EQ(notifier.messages().back(), id + " was cancelled: Scope cut") << "Tividy: the cancellation reason reaches the Notifier";
+    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_CANCELLED), 1) << "TividyMediator: cancel() publishes an event";
+    EXPECT_EQ(notifier.messages().back(), id + " was cancelled: Scope cut") << "TividyMediator: the cancellation reason reaches the Notifier";
 
     // A definition with nothing to do finishes as soon as it starts.
     WorkflowDefinition empty;
     empty.name = "Empty";
     engine.loadDefinition("empty", empty);
     std::string emptyId = engine.startInstance("empty");
-    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_COMPLETED), 1) << "Tividy: an instance that completes on start publishes InstanceCompleted";
+    EXPECT_EQ(metrics.count(WorkflowEvent::INSTANCE_COMPLETED), 1) << "TividyMediator: an instance that completes on start publishes InstanceCompleted";
     (void)emptyId;
 }
 

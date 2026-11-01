@@ -6,9 +6,9 @@
 #include <stdexcept>
 
 #include "core/WorkflowDefinition.h"
-#include "patterns/structural/Tividy.h"
-#include "patterns/execution/DepthFirstIterator.h"
-#include "patterns/structural/LeafWorkItem.h"
+#include "mediator/TividyMediator.h"
+#include "iterator/DepthFirstIterator.h"
+#include "composite/LeafTask.h"
 #include "server/ActivityLog.h"
 #include "server/ScenarioStore.h"
 
@@ -93,11 +93,11 @@ static std::string readRest(std::istringstream& in) {
 // Printing
 // ---------------------------------------------------------------------------
 
-static void printTree(WorkNode* node, int depth) {
+static void printTree(Task* node, int depth) {
     std::string indent(depth * 2, ' ');
-    WorkItem* item = dynamic_cast<WorkItem*>(node);
+    LeafTask* item = leafOf(node);
     if (item != nullptr) {
-        LeafWorkItem* leaf = dynamic_cast<LeafWorkItem*>(item);
+        LeafTask* leaf = leafOf(item);
         std::cout << indent << "- [" << item->status() << "] "
                   << item->id();
         if (leaf != nullptr && item->name() != item->id()) {
@@ -121,7 +121,7 @@ static void printTree(WorkNode* node, int depth) {
     }
 }
 
-static void printInstance(Tividy& engine, const std::string& id) {
+static void printInstance(TividyMediator& engine, const std::string& id) {
     const WorkflowInstance& inst = engine.instance(id);
     std::cout << "\nInstance: " << inst.id()
               << "  (" << inst.title() << ")\n"
@@ -136,7 +136,7 @@ static void printInstance(Tividy& engine, const std::string& id) {
     std::cout << "\n  progress: " << (engine.progress(id) * 100.0) << "%\n";
 }
 
-static void printReady(Tividy& engine, const std::string& id) {
+static void printReady(TividyMediator& engine, const std::string& id) {
     std::vector<std::string> items = engine.readyItems(id);
     if (items.empty()) {
         std::cout << "  (nothing is ready)\n";
@@ -147,7 +147,7 @@ static void printReady(Tividy& engine, const std::string& id) {
     }
 }
 
-static void printTeam(Tividy& engine) {
+static void printTeam(TividyMediator& engine) {
     std::cout << "\nOrganisation: " << engine.organisation().name() << "\n";
     std::vector<Participant*> people = engine.organisation().participants();
     for (std::size_t i = 0; i < people.size(); ++i) {
@@ -163,7 +163,7 @@ static void printTeam(Tividy& engine) {
 // Command dispatch
 // ---------------------------------------------------------------------------
 
-static void dispatch(Tividy& engine, const std::string& line, bool& quit) {
+static void dispatch(TividyMediator& engine, const std::string& line, bool& quit) {
     std::istringstream in(line);
     std::string cmd = readToken(in);
 
@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    Tividy engine("Company");
+    TividyMediator engine("Company");
     ActivityLog log(engine);
     engine.bus().attach(&log);
     try {

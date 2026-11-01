@@ -134,7 +134,7 @@ Expected equality of these values:
   loadOf(*engine, "Alice")
     Which is: 2
   1
-Tividy: assign() adds to the assignee's load
+TividyMediator: assign() adds to the assignee's load
 [  FAILED  ] Facade.WorkItems (1 ms)
 ```
 
@@ -159,17 +159,19 @@ If the Testing panel is empty, run **CMake: Configure** from the command palette
 | Suite | File | Covers |
 | --- | --- | --- |
 | `Builder` | `builderUnitTest.cpp` | Builder and directors |
-| `Command` | `commandUnitTest.cpp` | Commands and the invoker |
+| `Command` | `commandUnitTest.cpp` | `RequestCommand` run by `ProjectFacade`, and the invoker |
 | `Memento` | `mementoUnitTest.cpp` | Snapshots and undo of commands |
 | `Strategy` | `strategyUnitTest.cpp` | Assignment strategies and the service |
 | `ChainOfResponsibility` | `chainUnitTest.cpp` | Approval handlers |
 | `AbstractFactory` | `factoryUnitTest.cpp` | Policy factories and the assembler |
 | `Composite`, `CompositeTree` | `compositeUnitTest.cpp`, `test_CompositeUnit.cpp` | Work tree |
 | `Iterator` | `iteratorUnitTest.cpp` | Tree iterators |
-| `WorkItemState`, `InstanceState`, `StageMode` | `test_workItemState.cpp`, `test_instanceState.cpp`, `test_stageModeState.cpp` | State pattern |
+| `DecoratorTest` | `decoratorUnitTest.cpp` | `BlockedWork`, `ValidatedWork`, and a task with sub-tasks becoming a `CompositeTask` |
+| `TaskState`, `InstanceState`, `StageMode` | `test_workItemState.cpp`, `test_instanceState.cpp`, `test_stageModeState.cpp` | State pattern |
 | `StateCompositeIntegration` | `test_stateXcompositeIntegration.cpp` | State and Composite together |
 | `WorkflowInstance` | `workflowInstanceUnitTest.cpp` | Running a definition |
-| `Facade` | `facadeUnitTest.cpp` | `Tividy` |
+| `Facade` | `facadeUnitTest.cpp` | `TividyMediator` and its facades |
+| `Mediator` | `mediatorUnitTest.cpp` | `Mediator::send`: Requests in, Responses out, refusals as codes, org and undo through their facades |
 | `Observer` | `observerUnitTest.cpp` | Event bus and observers |
 | `CompanyComposite` | `orgUnitTest.cpp` | Teams inside teams, and the assignment Bridge |
 | `StructuredWorkflow` | `dependencyUnitTest.cpp` | Nested projects, blocking, filtering iterators |
@@ -190,15 +192,15 @@ There is no `main()` in `tests/`. It comes from `gtest_main`, which CMake links 
 ```cpp
 #include <gtest/gtest.h>
 
-#include "patterns/structural/LeafWorkItem.h"
+#include "composite/LeafTask.h"
 
 TEST(Priority, DefaultsToMedium) {
-    LeafWorkItem item("t1", "Write docs", "Developer");
+    LeafTask item("t1", "Write docs", "Developer");
     EXPECT_EQ(item.priority(), "Medium") << "A new item starts at Medium";
 }
 
 TEST(Priority, RejectsUnknownLevels) {
-    LeafWorkItem item("t1", "Write docs", "Developer");
+    LeafTask item("t1", "Write docs", "Developer");
     EXPECT_THROW(item.setPriority("Critical"), std::invalid_argument);
 }
 ```
@@ -230,9 +232,12 @@ When comparing a `size()` with a number, write the number as unsigned (`2u`) to 
 When several tests need the same setup, put it in a fixture and use `TEST_F`:
 
 ```cpp
+#include "mediator/TividyMediator.h"
+#include "server/DemoSeed.h"
+
 class DemoCompanyTest : public ::testing::Test {
 protected:
-    Tividy engine;
+    TividyMediator engine;
 
     DemoCompanyTest() : engine("Acme") {}
 

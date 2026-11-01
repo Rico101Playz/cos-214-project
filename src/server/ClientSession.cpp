@@ -1,10 +1,10 @@
 #include "server/ClientSession.h"
 #include "server/Json.h"
 #include "server/EventText.h"
-#include "patterns/structural/Tividy.h"
-#include "patterns/structural/LeafWorkItem.h"
+#include "mediator/TividyMediator.h"
+#include "composite/LeafTask.h"
 
-ClientSession::ClientSession(int id, Tividy& engine, MessageSink sink)
+ClientSession::ClientSession(int id, TividyMediator& engine, MessageSink sink)
     : id_(id), engine_(engine), sink_(sink), dirty_(false) {}
 
 ClientSession::~ClientSession() {
@@ -18,7 +18,7 @@ bool ClientSession::loggedIn() const { return proxy_ != nullptr; }
 std::string ClientSession::participant() const { return proxy_ ? proxy_->actor() : std::string(); }
 
 void ClientSession::login(const std::string& participant) {
-    std::unique_ptr<SecuredTividy> proxy(new SecuredTividy(engine_, participant));
+    std::unique_ptr<SecuredMediator> proxy(new SecuredMediator(engine_, participant));
     proxy_ = std::move(proxy);
     engine_.bus().attach(this);
     dirty_ = true;
@@ -30,7 +30,7 @@ void ClientSession::logout() {
     dirty_ = false;
 }
 
-SecuredTividy& ClientSession::proxy() {
+SecuredMediator& ClientSession::proxy() {
     if (!proxy_) {
         throw AccessDenied("Choose who you are first");
     }
@@ -54,7 +54,7 @@ bool ClientSession::concernsMe(const WorkflowEvent& event) const {
     if (t == WorkflowEvent::ITEM_REJECTED || t == WorkflowEvent::ITEM_APPROVED ||
         t == WorkflowEvent::ITEM_SIGNED || t == WorkflowEvent::PRIORITY_CHANGED) {
         try {
-            const WorkItem* item = engine_.instance(event.instanceId).item(event.itemId);
+            const LeafTask* item = engine_.instance(event.instanceId).item(event.itemId);
             return item != nullptr && item->assignee() == me && event.detail != me;
         } catch (const std::exception&) {
             return false;
@@ -62,7 +62,7 @@ bool ClientSession::concernsMe(const WorkflowEvent& event) const {
     }
     if (t == WorkflowEvent::SUBTASK_ADDED) {
         try {
-            const WorkItem* parent = engine_.instance(event.instanceId).item(event.detail);
+            const LeafTask* parent = engine_.instance(event.instanceId).item(event.detail);
             return parent != nullptr && parent->assignee() == me;
         } catch (const std::exception&) {
             return false;

@@ -4,10 +4,10 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include "patterns/execution/WorkflowObserver.h"
-#include "patterns/structural/SecuredTividy.h"
+#include "observer/WorkflowObserver.h"
+#include "proxy/SecuredMediator.h"
 
-class Tividy;
+class TividyMediator;
 class Json;
 
 typedef std::function<void(const std::string&)> MessageSink;
@@ -15,15 +15,15 @@ typedef std::function<void(const std::string&)> MessageSink;
 class ClientSession : public WorkflowObserver {
 private:
     int id_;
-    Tividy& engine_;
+    TividyMediator& engine_;
     MessageSink sink_;
-    std::unique_ptr<SecuredTividy> proxy_;
+    std::unique_ptr<SecuredMediator> proxy_;
     bool dirty_;
 
     bool concernsMe(const WorkflowEvent& event) const;
 
 public:
-    ClientSession(int id, Tividy& engine, MessageSink sink);
+    ClientSession(int id, TividyMediator& engine, MessageSink sink);
     ~ClientSession();
 
     ClientSession(const ClientSession&) = delete;
@@ -35,7 +35,7 @@ public:
 
     void login(const std::string& participant);
     void logout();
-    SecuredTividy& proxy();
+    SecuredMediator& proxy();
 
     void onEvent(const WorkflowEvent& event) override;
 

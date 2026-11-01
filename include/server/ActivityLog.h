@@ -4,19 +4,19 @@
 #include <cstddef>
 #include <string>
 #include <vector>
-#include "patterns/execution/WorkflowObserver.h"
+#include "observer/WorkflowObserver.h"
 
-class Tividy;
+class TividyMediator;
 
 class ActivityLog : public WorkflowObserver {
 private:
-    const Tividy& engine_;
+    const TividyMediator& engine_;
     std::vector<std::string> entries_;
     std::size_t limit_;
     unsigned long version_;
 
 public:
-    ActivityLog(const Tividy& engine, std::size_t limit = 1000);
+    ActivityLog(const TividyMediator& engine, std::size_t limit = 1000);
 
     void onEvent(const WorkflowEvent& event) override;
 

@@ -153,7 +153,7 @@ int WebServer::onData(mg_connection* conn, int bits, char* data, size_t length, 
     if (opcode == MG_WEBSOCKET_OPCODE_PING || opcode == MG_WEBSOCKET_OPCODE_PONG) return 1;
     if (opcode == MG_WEBSOCKET_OPCODE_BINARY) return 0;
 
-    if (link->partial.size() + length > CommandPipeline::MAX_MESSAGE) return 0;
+    if (link->partial.size() + length > RequestReader::MAX_MESSAGE) return 0;
     link->partial.append(data, length);
     if (!final) return 1;
 

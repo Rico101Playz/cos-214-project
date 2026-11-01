@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "core/Participant.h"
+#include "org_composite/Participant.h"
 
 // The organisation that runs a workflow: it owns its participants (composition).
 // Participants are looked up by name, or by the role a work item asks for.

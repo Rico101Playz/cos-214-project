@@ -3,12 +3,12 @@
 
 #include <string>
 
-class Tividy;
+class TividyMediator;
 class WorkflowEvent;
 
 class EventText {
 public:
-    static std::string describe(const Tividy& engine, const WorkflowEvent& event);
+    static std::string describe(const TividyMediator& engine, const WorkflowEvent& event);
 };
 
 #endif

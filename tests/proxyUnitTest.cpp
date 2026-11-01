@@ -3,10 +3,10 @@
 #include <stdexcept>
 #include <string>
 
-#include "patterns/creation/ConcreteDefinitionBuilder.h"
-#include "patterns/structural/LeafWorkItem.h"
-#include "patterns/structural/SecuredTividy.h"
-#include "patterns/structural/Tividy.h"
+#include "builder/ConcreteDefinitionBuilder.h"
+#include "composite/LeafTask.h"
+#include "proxy/SecuredMediator.h"
+#include "mediator/TividyMediator.h"
 #include "server/DemoSeed.h"
 
 namespace {
@@ -24,17 +24,17 @@ bool allowed(F f) {
 }
 
 TEST(Proxy, Roles) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     DemoSeed::templates(engine);
 
-    SecuredTividy maya(engine, "Maya");
-    SecuredTividy tom(engine, "Tom");
-    SecuredTividy bob(engine, "Bob");
-    SecuredTividy fay(engine, "Fay");
+    SecuredMediator maya(engine, "Maya");
+    SecuredMediator tom(engine, "Tom");
+    SecuredMediator bob(engine, "Bob");
+    SecuredMediator fay(engine, "Fay");
     EXPECT_TRUE(maya.isManager() && !bob.isManager()) << "Proxy: knows who is a manager";
     bool ghostRefused = false;
-    try { SecuredTividy ghost(engine, "Ghost"); } catch (const std::invalid_argument&) { ghostRefused = true; }
+    try { SecuredMediator ghost(engine, "Ghost"); } catch (const std::invalid_argument&) { ghostRefused = true; }
     EXPECT_TRUE(ghostRefused) << "Proxy: an unknown person cannot get a proxy";
 
     EXPECT_THROW(([&] { bob.startProject("Feature Delivery", "x", ""); })(), AccessDenied) << "Proxy: workers cannot start projects";
@@ -64,7 +64,7 @@ TEST(Proxy, Roles) {
     EXPECT_FALSE(fay.mayClaim(p, "api")) << "Proxy: Fay is not in Back-end, so cannot claim api";
     EXPECT_NO_THROW(([&] { bob.assign(p, "api", "Bob"); })()) << "Proxy: Bob can claim back-end work";
     EXPECT_NO_THROW(([&] { bob.start(p, "api"); bob.complete(p, "api"); })()) << "Proxy: and finish it";
-    SecuredTividy rita(engine, "Rita");
+    SecuredMediator rita(engine, "Rita");
     EXPECT_TRUE(rita.mayDecide(p, "api")) << "Proxy: the Reviewer may decide on api";
     EXPECT_NO_THROW(([&] { rita.reject(p, "api", "Needs tests"); })()) << "Proxy: and request changes";
     EXPECT_TRUE(engine.instance(p).item("api")->reason() == "Needs tests") << "Proxy: the reason reaches the item";
@@ -77,28 +77,28 @@ TEST(Proxy, Roles) {
 }
 
 TEST(Proxy, AutoApproval) {
-    Tividy engine("Acme");
+    TividyMediator engine("Acme");
     DemoSeed::company(engine);
     ConcreteDefinitionBuilder b;
     b.reset("Tiny");
     b.setPolicy("SmallTeam");
     b.addStructuredStage(StageTemplate("only", "Only"));
-    b.addStructuredItem("only", ItemTemplate("ship", "Ship it", "ReleaseManager", "platform", "Auto"));
-    b.addStructuredItem("only", ItemTemplate("note", "Release note", "ReleaseManager", "platform", "Auto"));
+    b.addStructuredItem("only", TaskTemplate("ship", "Ship it", "ReleaseManager", "platform", "Auto"));
+    b.addStructuredItem("only", TaskTemplate("note", "Release note", "ReleaseManager", "platform", "Auto"));
     engine.loadDefinition("Tiny", b.build());
 
     std::string small = engine.startProject("Tiny", "", "SmallTeam");
     engine.autoAssign(small, "ship");
     engine.start(small, "ship");
     engine.complete(small, "ship");
-    EXPECT_TRUE(engine.instance(small).item("ship")->status() == WorkItem::COMPLETED) << "Chain: SmallTeam auto-approves Auto items";
+    EXPECT_TRUE(engine.instance(small).item("ship")->status() == LeafTask::COMPLETED) << "Chain: SmallTeam auto-approves Auto items";
 
     std::string busy = engine.startProject("Tiny", "", "BusyTeam");
     engine.autoAssign(busy, "ship");
     engine.start(busy, "ship");
     engine.complete(busy, "ship");
-    LeafWorkItem* ship = dynamic_cast<LeafWorkItem*>(engine.instance(busy).item("ship"));
-    EXPECT_TRUE(ship->status() == WorkItem::AWAITING_APPROVAL && ship->pendingApprover() == "Manager") << "Chain: BusyTeam has no auto handler, so a Manager must approve";
+    LeafTask* ship = leafOf(engine.instance(busy).item("ship"));
+    EXPECT_TRUE(ship->status() == LeafTask::AWAITING_APPROVAL && ship->pendingApprover() == "Manager") << "Chain: BusyTeam has no auto handler, so a Manager must approve";
     EXPECT_EQ(engine.approvalsFor("Nina").size(), 1u) << "Chain: every manager sees Manager approvals";
 }
 

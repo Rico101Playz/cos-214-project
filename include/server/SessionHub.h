@@ -7,15 +7,15 @@
 #include <mutex>
 #include <string>
 #include "server/ClientSession.h"
-#include "server/CommandPipeline.h"
+#include "server/RequestReader.h"
 
-class Tividy;
+class TividyMediator;
 class ActivityLog;
 
 class SessionHub {
 private:
-    Tividy& engine_;
-    CommandPipeline pipeline_;
+    TividyMediator& engine_;
+    RequestReader pipeline_;
     std::map<int, std::unique_ptr<ClientSession> > sessions_;
     int nextId_;
     std::mutex mutex_;
@@ -27,7 +27,7 @@ private:
     void signOutRemoved();
 
 public:
-    explicit SessionHub(Tividy& engine, ActivityLog* log = nullptr,
+    explicit SessionHub(TividyMediator& engine, ActivityLog* log = nullptr,
                         std::function<void()> onChange = std::function<void()>());
     ~SessionHub();
 
