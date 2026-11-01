@@ -1,9 +1,9 @@
+#include <gtest/gtest.h>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "test_utils.h"
 
 #include "core/Participant.h"
 #include "core/WorkflowDefinition.h"
@@ -55,59 +55,47 @@ static int loadOf(Tividy &engine, const std::string &name)
 // ============================================================================
 // TEST: definitions and instances
 // ============================================================================
-void test_FacadeDefinitions()
-{
-      std::cout << "\n--- Testing Tividy definitions and instances ---\n";
+TEST(Facade, Definitions) {
 
       std::unique_ptr<Tividy> engine(makeEngine());
-      check(engine->organisation().name() == "Acme Software", "Tividy: owns the named organisation");
-      check(engine->hasDefinition("delivery") == false, "Tividy: starts with no definitions");
+      EXPECT_TRUE(engine->organisation().name() == "Acme Software") << "Tividy: owns the named organisation";
+      EXPECT_TRUE(engine->hasDefinition("delivery") == false) << "Tividy: starts with no definitions";
 
       engine->loadDefinition("outline");
-      check(engine->hasDefinition("outline"), "Tividy: loadDefinition(name) builds and stores a definition");
+      EXPECT_TRUE(engine->hasDefinition("outline")) << "Tividy: loadDefinition(name) builds and stores a definition";
 
       engine->loadDefinition("delivery", deliveryDefinition());
-      check(engine->hasDefinition("delivery"), "Tividy: loadDefinition(name, definition) stores it");
+      EXPECT_TRUE(engine->hasDefinition("delivery")) << "Tividy: loadDefinition(name, definition) stores it";
 
-      check(throws<std::invalid_argument>([&]
-                                          { engine->startInstance("missing"); }),
-            "Tividy: startInstance() of an unknown definition is rejected");
+      EXPECT_THROW(([&]
+                                          { engine->startInstance("missing"); })(), std::invalid_argument) << "Tividy: startInstance() of an unknown definition is rejected";
 
       std::string first = engine->startInstance("delivery");
       std::string second = engine->startInstance("outline");
-      check(first != second, "Tividy: every instance gets its own id");
-      check(engine->instance(first).state() == WorkflowInstance::RUNNING,
-            "Tividy: startInstance() starts the instance");
-      check(engine->instance(first).title() == "Feature Delivery",
-            "Tividy: the instance runs the requested definition");
+      EXPECT_NE(first, second) << "Tividy: every instance gets its own id";
+      EXPECT_TRUE(engine->instance(first).state() == WorkflowInstance::RUNNING) << "Tividy: startInstance() starts the instance";
+      EXPECT_TRUE(engine->instance(first).title() == "Feature Delivery") << "Tividy: the instance runs the requested definition";
 
       std::vector<std::string> ready = engine->readyItems(first);
-      check(ready.size() == 2 && ready[0] == "Implement" && ready[1] == "Test",
-            "Tividy: readyItems() lists the released work in order");
-      check(engine->progress(first) == 0.0, "Tividy: progress() starts at 0");
+      EXPECT_TRUE(ready.size() == 2 && ready[0] == "Implement" && ready[1] == "Test") << "Tividy: readyItems() lists the released work in order";
+      EXPECT_TRUE(engine->progress(first) == 0.0) << "Tividy: progress() starts at 0";
 
       WorkflowDefinition changed = deliveryDefinition();
       changed.name = "Feature Delivery v2";
       engine->loadDefinition("delivery", changed);
-      check(engine->instance(first).title() == "Feature Delivery",
-            "Tividy: reloading a definition leaves running instances on their version");
-      check(engine->instance(engine->startInstance("delivery")).title() == "Feature Delivery v2",
-            "Tividy: new instances use the reloaded definition");
+      EXPECT_TRUE(engine->instance(first).title() == "Feature Delivery") << "Tividy: reloading a definition leaves running instances on their version";
+      EXPECT_TRUE(engine->instance(engine->startInstance("delivery")).title() == "Feature Delivery v2") << "Tividy: new instances use the reloaded definition";
 
-      check(throws<std::invalid_argument>([&]
-                                          { engine->instance("instance-99"); }),
-            "Tividy: an unknown instance id is rejected");
-      check(throws<std::invalid_argument>([&]
-                                          { engine->readyItems("instance-99"); }),
-            "Tividy: readyItems() of an unknown instance is rejected");
+      EXPECT_THROW(([&]
+                                          { engine->instance("instance-99"); })(), std::invalid_argument) << "Tividy: an unknown instance id is rejected";
+      EXPECT_THROW(([&]
+                                          { engine->readyItems("instance-99"); })(), std::invalid_argument) << "Tividy: readyItems() of an unknown instance is rejected";
 }
 
 // ============================================================================
 // TEST: driving work items end to end
 // ============================================================================
-void test_FacadeWorkItems()
-{
-      std::cout << "\n--- Testing Tividy work item operations ---\n";
+TEST(Facade, WorkItems) {
 
       std::unique_ptr<Tividy> engine(makeEngine());
       engine->loadDefinition("delivery", deliveryDefinition());
@@ -115,85 +103,69 @@ void test_FacadeWorkItems()
       const WorkflowInstance &instance = engine->instance(id);
 
       engine->assign(id, "Implement", "Alice");
-      check(instance.item("Implement")->assignee() == "Alice", "Tividy: assign() assigns the item");
-      check(loadOf(*engine, "Alice") == 1, "Tividy: assign() adds to the assignee's load");
-      check(engine->readyItems(id).size() == 1, "Tividy: assigned work is no longer ready");
+      EXPECT_TRUE(instance.item("Implement")->assignee() == "Alice") << "Tividy: assign() assigns the item";
+      EXPECT_EQ(loadOf(*engine, "Alice"), 1) << "Tividy: assign() adds to the assignee's load";
+      EXPECT_TRUE(engine->readyItems(id).size() == 1) << "Tividy: assigned work is no longer ready";
 
       engine->assign(id, "Implement", "Bob");
-      check(loadOf(*engine, "Alice") == 0 && loadOf(*engine, "Bob") == 1,
-            "Tividy: reassigning moves the load to the new assignee");
+      EXPECT_TRUE(loadOf(*engine, "Alice") == 0 && loadOf(*engine, "Bob") == 1) << "Tividy: reassigning moves the load to the new assignee";
 
-      check(throws<std::invalid_argument>([&]
-                                          { engine->assign(id, "Implement", "Nobody"); }),
-            "Tividy: assigning to an unknown participant is rejected");
-      check(throws<std::invalid_argument>([&]
-                                          { engine->assign(id, "Ghost", "Alice"); }),
-            "Tividy: assigning an unknown item is rejected");
-      check(throws<std::invalid_argument>([&]
-                                          { engine->start(id, "Build"); }),
-            "Tividy: a stage id is not accepted as an item");
-      check(throws<std::logic_error>([&]
-                                     { engine->complete(id, "Implement"); }),
-            "Tividy: an operation the item's status does not allow is rejected");
-      check(instance.item("Implement")->assignee() == "Bob" && loadOf(*engine, "Bob") == 1,
-            "Tividy: a rejected call changes nothing");
+      EXPECT_THROW(([&]
+                                          { engine->assign(id, "Implement", "Nobody"); })(), std::invalid_argument) << "Tividy: assigning to an unknown participant is rejected";
+      EXPECT_THROW(([&]
+                                          { engine->assign(id, "Ghost", "Alice"); })(), std::invalid_argument) << "Tividy: assigning an unknown item is rejected";
+      EXPECT_THROW(([&]
+                                          { engine->start(id, "Build"); })(), std::invalid_argument) << "Tividy: a stage id is not accepted as an item";
+      EXPECT_THROW(([&]
+                                     { engine->complete(id, "Implement"); })(), std::logic_error) << "Tividy: an operation the item's status does not allow is rejected";
+      EXPECT_TRUE(instance.item("Implement")->assignee() == "Bob" && loadOf(*engine, "Bob") == 1) << "Tividy: a rejected call changes nothing";
 
       engine->start(id, "Implement");
       engine->complete(id, "Implement");
-      check(instance.item("Implement")->status() == WorkItem::AWAITING_APPROVAL,
-            "Tividy: start() and complete() move the item to approval");
+      EXPECT_TRUE(instance.item("Implement")->status() == WorkItem::AWAITING_APPROVAL) << "Tividy: start() and complete() move the item to approval";
 
       engine->reject(id, "Implement", "Needs tests");
-      check(instance.item("Implement")->status() == WorkItem::REJECTED, "Tividy: reject() rejects the work");
-      check(instance.item("Implement")->reason() == "Needs tests", "Tividy: reject() keeps the reason");
-      check(loadOf(*engine, "Bob") == 0, "Tividy: reject() releases the assignee's load");
+      EXPECT_TRUE(instance.item("Implement")->status() == WorkItem::REJECTED) << "Tividy: reject() rejects the work";
+      EXPECT_TRUE(instance.item("Implement")->reason() == "Needs tests") << "Tividy: reject() keeps the reason";
+      EXPECT_EQ(loadOf(*engine, "Bob"), 0) << "Tividy: reject() releases the assignee's load";
 
       engine->assign(id, "Implement", "Bob");
-      check(loadOf(*engine, "Bob") == 1, "Tividy: rejected work can be reassigned for rework");
+      EXPECT_EQ(loadOf(*engine, "Bob"), 1) << "Tividy: rejected work can be reassigned for rework";
       engine->start(id, "Implement");
       engine->complete(id, "Implement");
       engine->approve(id, "Implement");
-      check(instance.item("Implement")->isComplete(), "Tividy: approve() completes the work");
-      check(loadOf(*engine, "Bob") == 0, "Tividy: approve() releases the assignee's load");
-      check(engine->progress(id) == 0.5, "Tividy: progress() is the share of finished work items");
-      check(instance.currentStage() == instance.find("Build"),
-            "Tividy: the instance stays on a stage with unfinished work");
+      EXPECT_TRUE(instance.item("Implement")->isComplete()) << "Tividy: approve() completes the work";
+      EXPECT_EQ(loadOf(*engine, "Bob"), 0) << "Tividy: approve() releases the assignee's load";
+      EXPECT_TRUE(engine->progress(id) == 0.5) << "Tividy: progress() is the share of finished work items";
+      EXPECT_EQ(instance.currentStage(), instance.find("Build")) << "Tividy: the instance stays on a stage with unfinished work";
 
       engine->assign(id, "Test", "Carol");
       engine->start(id, "Test");
       engine->complete(id, "Test");
       engine->approve(id, "Test");
-      check(instance.state() == WorkflowInstance::COMPLETED,
-            "Tividy: approving the last work moves the instance through to Completed");
-      check(engine->progress(id) == 1.0, "Tividy: a completed instance has full progress");
-      check(engine->readyItems(id).empty(), "Tividy: nothing is ready in a completed instance");
+      EXPECT_EQ(instance.state(), WorkflowInstance::COMPLETED) << "Tividy: approving the last work moves the instance through to Completed";
+      EXPECT_TRUE(engine->progress(id) == 1.0) << "Tividy: a completed instance has full progress";
+      EXPECT_TRUE(engine->readyItems(id).empty()) << "Tividy: nothing is ready in a completed instance";
 
       engine->undo();
       engine->undo();
 
-      check(instance.state() == WorkflowInstance::RUNNING,
-            "undo: instance returns to Running after undoing the final approve");
-      check(instance.item("Test")->status() == "InProgress",
-            "undo: Test item rolled back to InProgress");
-      check(instance.item("Implement")->status() == "Completed",
-            "undo: Implement's earlier completion is unaffected");
+      EXPECT_EQ(instance.state(), WorkflowInstance::RUNNING) << "undo: instance returns to Running after undoing the final approve";
+      EXPECT_TRUE(instance.item("Test")->status() == "InProgress") << "undo: Test item rolled back to InProgress";
+      EXPECT_TRUE(instance.item("Implement")->status() == "Completed") << "undo: Implement's earlier completion is unaffected";
 
       // Prove the instance is still usable: drive Test forward again.
       engine->complete(id, "Test");
-      check(instance.item("Test")->status() == "AwaitingApproval",
-            "undo: instance still accepts commands after undo");
+      EXPECT_TRUE(instance.item("Test")->status() == "AwaitingApproval") << "undo: instance still accepts commands after undo";
       engine->approve(id, "Test");
-      check(instance.state() == WorkflowInstance::COMPLETED,
-            "undo: approving again re-completes the instance");
+      EXPECT_EQ(instance.state(), WorkflowInstance::COMPLETED) << "undo: approving again re-completes the instance";
       
       }
 
 // ============================================================================
 // TEST: cancelling an instance
 // ============================================================================
-void test_FacadeCancel()
-{
-      std::cout << "\n--- Testing Tividy cancel ---\n";
+TEST(Facade, Cancel) {
 
       std::unique_ptr<Tividy> engine(makeEngine());
       engine->loadDefinition("delivery", deliveryDefinition());
@@ -205,37 +177,20 @@ void test_FacadeCancel()
 
       engine->cancel(id, "Feature dropped");
       const WorkflowInstance &instance = engine->instance(id);
-      check(instance.state() == WorkflowInstance::CANCELLED, "Tividy: cancel() cancels the instance");
-      check(instance.reason() == "Feature dropped", "Tividy: cancel() keeps the reason");
-      check(instance.item("Implement")->status() == WorkItem::CANCELLED,
-            "Tividy: cancel() cancels the instance's work");
-      check(loadOf(*engine, "Alice") == 0 && loadOf(*engine, "Carol") == 0,
-            "Tividy: cancel() releases everyone still working on it");
+      EXPECT_EQ(instance.state(), WorkflowInstance::CANCELLED) << "Tividy: cancel() cancels the instance";
+      EXPECT_EQ(instance.reason(), "Feature dropped") << "Tividy: cancel() keeps the reason";
+      EXPECT_TRUE(instance.item("Implement")->status() == WorkItem::CANCELLED) << "Tividy: cancel() cancels the instance's work";
+      EXPECT_TRUE(loadOf(*engine, "Alice") == 0 && loadOf(*engine, "Carol") == 0) << "Tividy: cancel() releases everyone still working on it";
 
-      check(throws<std::logic_error>([&]
-                                     { engine->cancel(id, "Again"); }),
-            "Tividy: cancelling twice is rejected");
-      check(throws<std::logic_error>([&]
-                                     { engine->start(id, "Implement"); }),
-            "Tividy: work in a cancelled instance cannot be started");
-      check(throws<std::invalid_argument>([&]
-                                          { engine->cancel("instance-99"); }),
-            "Tividy: cancelling an unknown instance is rejected");
+      EXPECT_THROW(([&]
+                                     { engine->cancel(id, "Again"); })(), std::logic_error) << "Tividy: cancelling twice is rejected";
+      EXPECT_THROW(([&]
+                                     { engine->start(id, "Implement"); })(), std::logic_error) << "Tividy: work in a cancelled instance cannot be started";
+      EXPECT_THROW(([&]
+                                          { engine->cancel("instance-99"); })(), std::invalid_argument) << "Tividy: cancelling an unknown instance is rejected";
 }
 
 // ============================================================================
 // MAIN
 // ============================================================================
-void run_facade_tests()
-{
-      std::cout << "\n--- Running Facade (Tividy) Tests ---\n";
-      int passedBefore = testsPassed;
-      int failedBefore = testsFailed;
 
-      test_FacadeDefinitions();
-      test_FacadeWorkItems();
-      test_FacadeCancel();
-
-      std::cout << "Facade Tests: " << (testsPassed - passedBefore) << " passed, "
-                << (testsFailed - failedBefore) << " failed.\n";
-}

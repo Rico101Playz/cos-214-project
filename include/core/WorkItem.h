@@ -25,6 +25,7 @@ public:
     static const char* const COMPLETED;
     static const char* const REJECTED;
     static const char* const CANCELLED;
+    static const char* const ESCALATED;
 
 private:
     std::string role_;
@@ -53,6 +54,8 @@ public:
     void setData(const std::string& key, const std::string& value);
     bool hasData(const std::string& key) const;
     std::string getData(const std::string& key, const std::string& fallback = "") const;
+    void removeData(const std::string& key);
+    const std::map<std::string, std::string>& data() const;
 
     virtual void makeAvailable();
     virtual void assign(const std::string& participant);
@@ -60,6 +63,8 @@ public:
     virtual void complete();
     virtual void approve();
     virtual void reject(const std::string& reason);
+
+    bool holdsLoad() const;
 
     bool isComplete() const override;
     double progress() const override;

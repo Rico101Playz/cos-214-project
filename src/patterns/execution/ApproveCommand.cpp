@@ -1,6 +1,7 @@
 #include "patterns/execution/ApproveCommand.h"
 #include "core/WorkflowInstance.h"
 #include "patterns/structural/LeafWorkItem.h"
+#include <vector>
 
 ApproveCommand::ApproveCommand(SnapshotStore* store, std::string instanceId, 
                                const std::string& itemId, bool approved, const std::string& comment)
@@ -28,6 +29,13 @@ void ApproveCommand::perform(WorkflowInstance* instance) {
             "' is not in a state that accepts " +
             (approved ? "approval" : "rejection"));
     }
+    LeafWorkItem* leaf = static_cast<LeafWorkItem*>(item);
+    if (approved) {
+        leaf->setPendingApprovers(std::vector<std::string>());
+    } else {
+        leaf->clearApprovals();
+    }
+    instance->advance();
 }
 
 

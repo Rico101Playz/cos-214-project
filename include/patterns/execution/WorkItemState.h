@@ -21,6 +21,7 @@ public:
     virtual void approve(LeafWorkItem& item);
     virtual void reject(LeafWorkItem& item, const std::string& reason);
     virtual void escalate(LeafWorkItem& item);
+    virtual void withdraw(LeafWorkItem& item);
 };
 
 #endif

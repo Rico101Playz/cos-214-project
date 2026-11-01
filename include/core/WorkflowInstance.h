@@ -11,14 +11,20 @@
 #include "patterns/execution/Memento.h"
 #include "patterns/structural/CompositeStage.h"
 
+class WorkflowFactory;
+class LeafWorkItem;
+
 class WorkflowInstance {
 public:
     static const char* const CREATED;
     static const char* const RUNNING;
     static const char* const COMPLETED;
     static const char* const CANCELLED;
+    static const char* const AWAITING_SIGNOFF;
 
     WorkflowInstance(const std::string& id, const WorkflowDefinition& definition);
+    WorkflowInstance(const std::string& id, const WorkflowDefinition& definition,
+                     const WorkflowFactory& factory, const std::string& title);
 
     WorkflowInstance(const WorkflowInstance&) = delete;
     WorkflowInstance& operator=(const WorkflowInstance&) = delete;
@@ -29,6 +35,20 @@ public:
     const std::string& state() const;
     const std::string& reason() const;
     const WorkflowDefinition& definition() const;
+    const std::string& name() const;
+    std::size_t currentStageIndex() const;
+    bool adoptItem(const std::string& stageId, std::unique_ptr<LeafWorkItem> item);
+    bool isActive(const WorkNode* node) const;
+    std::size_t topLevelIndex(const WorkNode* node) const;
+
+    bool requiresSignOff() const;
+    void setRequiresSignOff(bool required);
+    void signOff();
+    CompositeStage& reopenForFixes(const WorkflowFactory& factory);
+
+    void rebuild(const WorkflowDefinition& definition, const std::string& name,
+                 std::unique_ptr<CompositeStage> root, const std::string& state,
+                 std::size_t stageIndex, const std::string& reason, bool signOffRequired);
 
     CompositeStage& root() const;
     WorkNode* currentStage() const;
@@ -72,6 +92,8 @@ private:
     std::string state_;
     std::string reason_;
     std::size_t currentStage_;
+    std::string name_;
+    bool requiresSignOff_;
 };
 
 #endif // WORKFLOWINSTANCE_H

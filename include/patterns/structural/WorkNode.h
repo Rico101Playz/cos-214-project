@@ -44,7 +44,6 @@ public:
     // ready, so stages keep this default.
     virtual bool isReady() const;
 
-    // Child access used by the iterators. Leaves have no children.
     virtual std::size_t childCount() const;
     virtual WorkNode* child(std::size_t index) const;
 

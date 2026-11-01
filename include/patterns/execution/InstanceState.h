@@ -16,6 +16,8 @@ public:
     virtual void start(WorkflowInstance& instance);
     virtual void advance(WorkflowInstance& instance);
     virtual void cancel(WorkflowInstance& instance, const std::string& reason);
+    virtual void signOff(WorkflowInstance& instance);
+    virtual void reopen(WorkflowInstance& instance);
 };
 
 #endif

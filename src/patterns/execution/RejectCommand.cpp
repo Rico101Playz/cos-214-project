@@ -23,6 +23,7 @@ void RejectCommand::perform(WorkflowInstance* instance) {
             "RejectCommand: item '" + itemId +
             "' cannot be rejected in its current state");
     }
+    static_cast<LeafWorkItem*>(item)->clearApprovals();
 }
 
 std::string RejectCommand::describe() const {

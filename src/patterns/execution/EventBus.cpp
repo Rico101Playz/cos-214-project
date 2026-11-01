@@ -23,7 +23,10 @@ void EventBus::notify(const WorkflowEvent& event) const {
     std::vector<WorkflowObserver*> snapshot = observers_;
     for (std::size_t i = 0; i < snapshot.size(); ++i) {
         if (isAttached(snapshot[i])) {
-            snapshot[i]->onEvent(event);
+            try {
+                snapshot[i]->onEvent(event);
+            } catch (...) {
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ const char* const WorkItem::AWAITING_APPROVAL = "AwaitingApproval";
 const char* const WorkItem::COMPLETED = "Completed";
 const char* const WorkItem::REJECTED = "Rejected";
 const char* const WorkItem::CANCELLED = "Cancelled";
+const char* const WorkItem::ESCALATED = "Escalated";
 
 WorkItem::WorkItem(const std::string& id, const std::string& name, const std::string& role)
     : WorkNode(id, name), role_(role), status_(CREATED) {}
@@ -30,6 +31,10 @@ std::string WorkItem::getData(const std::string& key, const std::string& fallbac
     }
     return it->second;
 }
+
+void WorkItem::removeData(const std::string& key) { data_.erase(key); }
+
+const std::map<std::string, std::string>& WorkItem::data() const { return data_; }
 
 const std::string& WorkItem::status() const { return status_; }
 
@@ -89,6 +94,11 @@ void WorkItem::reject(const std::string& reason) {
 }
 
 bool WorkItem::isComplete() const { return status_ == COMPLETED; }
+
+bool WorkItem::holdsLoad() const {
+    return !assignee_.empty() &&
+           (status_ == ASSIGNED || status_ == IN_PROGRESS || status_ == AWAITING_APPROVAL || status_ == ESCALATED);
+}
 
 double WorkItem::progress() const { return isComplete() ? 1.0 : 0.0; }
 

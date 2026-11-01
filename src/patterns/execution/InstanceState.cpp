@@ -10,6 +10,8 @@ void InstanceState::illegal(const char* operation) const {
 
 void InstanceState::start(WorkflowInstance&)                      { illegal("start"); }
 void InstanceState::cancel(WorkflowInstance&, const std::string&) { illegal("cancel"); }
+void InstanceState::signOff(WorkflowInstance&)                    { illegal("signOff"); }
+void InstanceState::reopen(WorkflowInstance&)                     { illegal("reopen"); }
 
 
 void InstanceState::advance(WorkflowInstance&) {}

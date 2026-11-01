@@ -9,4 +9,5 @@ run_tests.exe
 build/
 
 # ignore ide settings vscode
-.vscode/
+.vscode/build-*/
+scenarios/*.tmp

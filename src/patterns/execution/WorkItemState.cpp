@@ -15,3 +15,4 @@ void WorkItemState::complete(LeafWorkItem&)                         { illegal("c
 void WorkItemState::approve(LeafWorkItem&)                          { illegal("approve"); }
 void WorkItemState::reject(LeafWorkItem&, const std::string&)       { illegal("reject"); }
 void WorkItemState::escalate(LeafWorkItem&)                         { illegal("escalate"); }
+void WorkItemState::withdraw(LeafWorkItem&)                         { illegal("withdraw"); }
