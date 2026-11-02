@@ -1,0 +1,15 @@
+# Ignore object files
+*.o
+*.obj
+
+# Ignore executables
+run_tests
+run_tests.exe
+
+build/
+
+# ignore ide settings vscode
+.vscode/build-*/
+scenarios/*.tmp
+html/
+latex/

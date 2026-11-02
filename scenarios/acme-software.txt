@@ -1,0 +1,60 @@
+# TIVIDY scenario. Saved automatically after every change.
+tividy	2
+company	Acme Software
+counters	1	1
+unit	engineering	Engineering	
+unit	backend	Back-end	engineering
+unit	frontend	Front-end	engineering
+unit	qa	QA	engineering
+unit	platform	Platform	
+person	Olivia	Owner	org	1
+person	Maya	Manager	engineering	1
+person	Tom	TechLead	engineering	1
+person	Rita	Reviewer	engineering	1
+person	Bob	Developer	backend	1
+person	Ben	Developer	backend	1
+person	Fay	Developer	frontend	1
+person	Dee	Designer	frontend	1
+person	Quinn	QA	qa	1
+person	Nina	Manager	platform	1
+person	Ray	ReleaseManager	platform	1
+definition	Blank board
+dname	Blank board
+dpolicy	BusyTeam
+dsignoff	0
+dlayout	board	Board	
+dtmpl	kickoff	Kick-off meeting	board	Manager		Medium
+dtmpl-approver	Manager
+end
+definition	Feature Delivery
+dname	Feature Delivery
+dpolicy	SmallTeam
+dsignoff	1
+dlayout	intake	Intake	
+dlayout	build	Build	
+dlayout	build-backend	Back-end work	build
+dlayout	build-frontend	Front-end work	build
+dlayout	verify	Verify	
+dlayout	release	Release	
+dtmpl	spec	Write technical spec	intake	TechLead	engineering	High
+dtmpl-approver	Manager
+dtmpl	api	Build the API endpoint	build-backend	Developer	backend	High
+dtmpl-approver	Reviewer
+dtmpl	migration	Database migration	build-backend	Developer	backend	Urgent
+dtmpl-approver	Reviewer
+dtmpl	mockups	Design the screens	build-frontend	Designer	frontend	Medium
+dtmpl-approver	Manager
+dtmpl	ui	Build the UI	build-frontend	Developer	frontend	Low
+dtmpl-approver	Reviewer
+dtmpl-blocker	mockups
+dtmpl-blocker	api
+dtmpl	tests	Write integration tests	verify	QA	qa	Medium
+dtmpl-approver	Reviewer
+dtmpl	code-review	Code review	verify	Reviewer	engineering	High
+dtmpl-approver	TechLead
+dtmpl-approver	Manager
+dtmpl-blocker	tests
+dtmpl	deploy	Deploy to production	release	ReleaseManager	platform	Urgent
+dtmpl-approver	Auto
+end
+log	2026-10-28 01:22:38  Demo company created
